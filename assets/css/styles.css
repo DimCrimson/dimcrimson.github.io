@@ -1,0 +1,15 @@
+.copyright {
+  display: flex;
+  justify-content: space-between;
+  /* align-items: center; */
+  font-size: 14px;
+  color: #777;
+}
+
+.copy-info {
+  text-align: start;
+}
+
+.theme-info {
+  text-align: end;
+}

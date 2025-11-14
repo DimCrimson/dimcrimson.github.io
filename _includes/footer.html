@@ -1,0 +1,13 @@
+<footer>
+  {% assign monthIndex = site.time | date: '%m' | minus: 1 %}
+
+  <p class="copyright">
+    <span class="copy-info">
+      &copy; {{ site.author }}
+      {{ site.data.en.months[monthIndex] | downcase }}
+      {{ site.time | date: '%Y' }} - All rights reserved.
+    </span>
+
+    <span class="theme-info"> Using the Chirpy theme for Jekyll. </span>
+  </p>
+</footer>
