@@ -14,14 +14,14 @@ timezone:
 # jekyll-seo-tag settings › https://github.com/jekyll/jekyll-seo-tag/blob/master/docs/usage.md
 # ↓ --------------------------
 
-title: Hi ! # the main title
+title: Sara in the Cloud # the main title
 
 author: Sara SENDID # the default author name
 
-tagline: Occasional ramblings about cloud security... # it will display as the subtitle
+tagline: Follow my occasional ramblings about cloud security... # it will display as the subtitle
 
 description: >- # used by seo meta and the atom feed
-  A minimal, responsive and feature-rich Jekyll theme for technical writing.
+  A space to host the occasional rambling about Azure security and more to come...
 
 # Fill in the protocol & hostname for your site.
 # E.g. 'https://username.github.io', note that it does not end with a '/'.
@@ -30,8 +30,8 @@ url: ""
 github:
   username: DimCrimson # change to your GitHub username
 
-twitter:
-  username: twitter_username # change to your Twitter username
+#twitter:
+#  username: twitter_username # change to your Twitter username
 
 social:
   # Change to your full name.
