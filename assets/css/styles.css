@@ -18,3 +18,10 @@
   font-size: 1.4rem;
   line-height: 1.8;
 }
+
+/* Target all code blocks */
+.highlight pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-x: auto;
+}

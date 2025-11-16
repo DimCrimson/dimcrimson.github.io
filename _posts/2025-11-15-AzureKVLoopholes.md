@@ -9,7 +9,8 @@ tags: [akv,azure,security]     # TAG names should always be lowercase
 
 *This article demonstrates a practical, reproducible chain where changing a vault's `tenantId` and using Access Policies plus the "trusted Microsoft services" bypass enabled a Data Factory instance in a different tenant to read secret values — even when no client IPs were explicitly whitelisted.*
 
-<small><span style="color:red;"> 🔐 Secrets used in this article are obviously insecure dummy data. Do not use them in your environments - your security team will cry. </span></small>
+<small><span style="color:red; display:block; text-align:center;"> 🔐 Secrets used in this article are obviously insecure dummy data. <br>
+Do not use them in your environments - your security team will cry. </span></small>
 
 ## 1. Introduction
 
@@ -42,7 +43,7 @@ However, it is not based on the usual Key Vault Data Actions, but on the permiss
 
 **⚠️ Attention:** *Directly referencing Key Vault secrets in a template does **not** return their values. Secrets are only available during [deployment execution](https://docs.azure.cn/en-us/azure-resource-manager/templates/key-vault-parameter?tabs=azure-cli#grant-deployment-access-to-the-secrets), either via a nested deployment template or a parameter file.* 
    ```powershell
-   (New-AzResourceGroupDeployment -Name "Deployment_KV_FW_Bypass" -ResourceGroupName "rg_sara" -TemplateFile .\deployment_template.json -TemplateParameterFile .\deployment_param.json).Outputs | fl
+(New-AzResourceGroupDeployment -Name "Deployment_KV_FW_Bypass" -ResourceGroupName "rg_sara" -TemplateFile .\deployment_template.json -TemplateParameterFile .\deployment_param.json).Outputs | fl
    ```
 
 ---
@@ -107,11 +108,38 @@ Let's explore our options based on the [Microsoft Trusted Services for Azure Key
 
 ### Putting Trusted Services to the Test
 
-| Indication                  | Scenario                        |                                                                      Method | Result                                                  |
-| --------------------------- | ------------------------------- | --------------------------------------------------------------------------: | :------------------------------------------------------ |
-| Azure VM deployment service | VM script extension             |  Custom extension calling Key Vault with an SPN authorized in access policy | ❌ Fail — IP ranges not whitelisted                      |
-| ARM deployment service      | ARM deployment scripts          | Deployment script calling Key Vault with an SPN authorized in access policy | ❌ Fail — IP ranges not whitelisted                      |
-| Azure Data Factory          | Data Factory in external tenant |   ADF Linked Service + system-assigned identity authorized in access policy | ✅ Success — works when initiated by ADF-managed compute |
+<div>
+  <table>
+    <thead>
+      <tr>
+        <th>Indication</th>
+        <th>Scenario</th>
+        <th>Method</th>
+        <th>Result</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Azure VM deployment service</td>
+        <td>VM script extension</td>
+        <td>Custom extension calling Key Vault with an SPN authorized in access policy</td>
+        <td>❌ Fail — IP ranges not whitelisted</td>
+      </tr>
+      <tr>
+        <td>ARM deployment service</td>
+        <td>ARM deployment scripts</td>
+        <td>Deployment script calling Key Vault with an SPN authorized in access policy</td>
+        <td>❌ Fail — IP ranges not whitelisted</td>
+      </tr>
+      <tr>
+        <td>Azure Data Factory</td>
+        <td>Data Factory in external tenant</td>
+        <td>ADF Linked Service + system-assigned identity authorized in access policy</td>
+        <td>✅ Success — works when initiated by ADF-managed compute</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
 
 Trusted services access appears scoped to the **Data Factory Integration Runtime**: some activities fail to retrieve Key Vault secrets, including Web and webhook activity pipelines.
 
