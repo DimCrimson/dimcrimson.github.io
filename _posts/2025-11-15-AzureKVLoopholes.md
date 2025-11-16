@@ -97,7 +97,7 @@ Update-AzKeyVault -VaultName "sse-kv" -ResourceGroupName "rg_sara" -DisableRbacA
 
 ## 3. Network Layer
 
-<small><span style="color:red;">At this stage, our Key Vault has no client IP whitelisted in its resource firewall.</span></small>
+<small><span style="color:red; display:block; text-align:center;">At this stage, our Key Vault has no client IP whitelisted in its resource firewall.</span></small>
 
 In addition to private endpoints and firewall rules, Key Vault has a network bypass option that allows specific Azure trusted services to access the vault.
 
