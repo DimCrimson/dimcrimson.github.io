@@ -28,16 +28,16 @@ description: >- # used by seo meta and the atom feed
 url: ""
 
 github:
-  username: DimCrimson # change to your GitHub username
+  username: DimCrimson
 
-#twitter:
-#  username: twitter_username # change to your Twitter username
+linkedin:
+  username: /in/sendidsara
 
 social:
   # Change to your full name.
   # It will be displayed as the default author of the posts and the copyright owner in the Footer
   name: Sara SENDID
-  email: sendidsara.pro@gmail.com # change to your email address
+  email: sendidsara.pro@gmail.com
   links:
     # The first element serves as the copyright owner's link
     #- https://twitter.com/username # change to your Twitter homepage
