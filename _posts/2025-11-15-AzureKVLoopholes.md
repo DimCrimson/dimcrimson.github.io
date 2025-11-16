@@ -37,8 +37,8 @@ This is Microsoft's recommended way to authenticate to Azure resources, with rol
 This variant still relies on RBAC Authorization to grant access to the Key Vault data plane through Azure ARM deployments.  
 However, it is not based on the usual Key Vault Data Actions, but on the permissions `Microsoft.KeyVault/Vaults/Deploy/Action` and `Microsoft.Resources/deployment/*` to retrieve secrets.  
 
-!["Deploy KV Custom Role"](./Images/2025-11-15-AzureKVLoopholes/custom-role-kv-deploy.png)
-!["Assigning KV Custom Role"](./Images/2025-11-15-AzureKVLoopholes/spn-kv-role-assignment.png)
+!["Deploy KV Custom Role"](/assets/Images/2025-11-15-AzureKVLoopholes/custom-role-kv-deploy.png)
+!["Assigning KV Custom Role"](/assets/Images/2025-11-15-AzureKVLoopholes/spn-kv-role-assignment.png)
 
 **⚠️ Attention:** *Directly referencing Key Vault secrets in a template does **not** return their values. Secrets are only available during [deployment execution](https://docs.azure.cn/en-us/azure-resource-manager/templates/key-vault-parameter?tabs=azure-cli#grant-deployment-access-to-the-secrets), either via a nested deployment template or a parameter file.* 
    ```powershell
@@ -53,7 +53,7 @@ Access Policies blend RBAC and local authentication concepts — they are still 
 
 Access Policies avoid the need to grant Key Vault administrators direct RBAC role assignments, relying instead on the permission `Microsoft.KeyVault/vaults/accessPolicies/write` and `Microsoft.KeyVault/vaults/write` to modify the Key Vault tenant ID value or switch authorization modes from RBAC to Access Policies.
 
-!["PSGetVault"](./Images/2025-11-15-AzureKVLoopholes/update-kv-access-policy.png)
+!["PSGetVault"](/assets/Images/2025-11-15-AzureKVLoopholes/update-kv-access-policy.png)
 
 *Why would a Tenant ID exist if access policies are limited to the current tenant?*
 
@@ -77,15 +77,15 @@ Let's modify the `tenantId` at the Key Vault level to point to a different exter
 }
 ```
 
-!["PSUpdateVaultAP"](./Images/2025-11-15-AzureKVLoopholes/update-kv-tenant-id.png)
+!["PSUpdateVaultAP"](/assets/Images/2025-11-15-AzureKVLoopholes/update-kv-tenant-id.png)
 
 After updating the Key Vault `tenantId`, adding the external access policy succeeds and the service principal can retrieve secrets **within the firewall’s whitelisted networks**.
 
-!["PSExternalSPN"](./Images/2025-11-15-AzureKVLoopholes/data-plane-access-success.png)
+!["PSExternalSPN"](/assets/Images/2025-11-15-AzureKVLoopholes/data-plane-access-success.png)
 
 *Perfect option to exploit for our initial theory...*
 
-!["KVDiagram"](./Images/2025-11-15-AzureKVLoopholes/akv-diagram.png)
+!["KVDiagram"](/assets/Images/2025-11-15-AzureKVLoopholes/akv-diagram.png)
 
 **⚠️ Attention:**  *Switching between RBAC and Access Policies requires updating the `DisableRbacAuthorization` property to match the access mode: it is not done automatically*
 
@@ -128,20 +128,20 @@ However, using ADF Linked Services and granting access to the managed identity s
    - Created a linked service pointing to a storage account with diagnostic settings enabled and used a Key Vault secret as a SAS URI to access a container.
 
    **✅ Result** — The call initiated from Data Factory was visible in the storage account logs with the secret value visible.  
-   ![SecretInLogs](./Images/2025-11-15-AzureKVLoopholes/secret-visible-in-logs.png)
+   ![SecretInLogs](/assets/Images/2025-11-15-AzureKVLoopholes/secret-visible-in-logs.png)
    
 - *Automated Pipeline* — Extracting all secrets from the Key Vault:
    - After digesting some Data Factory documentation, I set up a simple pipeline to retrieve all secret objects in the Key Vault, loop through each object, call the Key Vault data plane to get the secret value, and write the results to a storage account.
-   ![DataFactoryPipeline](./Images/2025-11-15-AzureKVLoopholes/data-factory-get-secrets.png)
+   ![DataFactoryPipeline](/assets/Images/2025-11-15-AzureKVLoopholes/data-factory-get-secrets.png)
 
    **✅ Result** — A few seconds after triggering the pipeline, a fresh dump of the Key Vault secrets was written to the target storage account.  
-   ![DataFactorySecretDump](./Images/2025-11-15-AzureKVLoopholes/data-factory-secret-dump.png)
+   ![DataFactorySecretDump](/assets/Images/2025-11-15-AzureKVLoopholes/data-factory-secret-dump.png)
 
 
 ---
 
 **📝 Note:** *The Key Vault diagnostic settings clearly show accesses made through the trusted-services bypass:*
- ![TrustedServicesDiag](./Images/2025-11-15-AzureKVLoopholes/kv-diagnostics-trusted-services.png)
+ ![TrustedServicesDiag](/assets/Images/2025-11-15-AzureKVLoopholes/kv-diagnostics-trusted-services.png)
 
 ## 4. Security Recommendations
 
