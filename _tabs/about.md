@@ -5,8 +5,10 @@ order: 4
 ---
 
 ### Sara SENDID / @DimCrimson
-Cybersecurity Engineer | Cloud Security Explorer ☁️  
+Cybersecurity Engineer 🛡️ | Cloud Security Explorer ☁️ | Ocassional Ace Ventura 🐾 
+
+I’m a cloud security engineer with a habit of wandering into rabbit holes in my free time. This space captures those explorations — the odd bugs, the lessons learned, and the simple insights worth sharing.
 
 On a path of endless learning... 
 
-Roller skating 🛼, cats 😺 & tea 🍵 galore...
+Video games 🎮, roller skates 🛼, cats 😺 & tea 🍵 galore...
