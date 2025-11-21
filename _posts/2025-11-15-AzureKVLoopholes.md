@@ -52,7 +52,7 @@ However, it is not based on the usual Key Vault Data Actions, but on the permiss
 
 Access Policies blend RBAC and local authentication concepts — they are still tied to Entra ID objects but operate outside the RBAC model of the current tenant. They can grant access to different Key Vault data plane objects: secrets, keys, and certificates.
 
-Access Policies avoid the need to grant Key Vault administrators direct RBAC role assignments, relying instead on the permission `Microsoft.KeyVault/vaults/accessPolicies/write` and `Microsoft.KeyVault/vaults/write` to modify the Key Vault tenant ID value or switch authorization modes from RBAC to Access Policies.
+Access Policies avoid the need to grant Key Vault administrators direct RBAC role assignments permissions, which was particularly useful before the introduction of [conditions](https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments#conditions) that restrict how role assignments can be issued. Instead, Access Policies rely on the permission `Microsoft.KeyVault/vaults/accessPolicies/write` and `Microsoft.KeyVault/vaults/write` to modify the Key Vault tenant ID value or switch authorization modes from RBAC to Access Policies.
 
 !["PSGetVault"](/assets/Images/2025-11-15-AzureKVLoopholes/update-kv-access-policy.png)
 
