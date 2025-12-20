@@ -4,18 +4,16 @@ date: 2025-12-19 23:00:00 +0000
 description: A practical guide to FOCI-driven token reuse 🔍
 comments: false
 categories: [Azure, Azure Entra ID]
-tags: [aad,entraid,msal,tokens,azure,security]     # TAG names should always be lowercase
+tags: [aad,entra id,msal,tokens,azure,security]     # TAG names should always be lowercase
 ---
 
-This article takes a closer look at FOCI, a Pandora's box of security risks opened by researchers at [SecureWorks](https://github.com/secureworks/family-of-client-ids-research), and its impact on amplifying the attack surface via Azure Entra ID tokens.
-I provide practical indications about where and how refresh and access tokens are stored depending on the application (CLI, PowerShell, desktop brokers, mobile, SPAs), and show extraction examples.
-Broker-managed tokens are explicitly treated as out of scope: their storage is OS-protected, device-bound, and typically accessible only with system or root privileges.
+This article takes a closer look at FOCI — a Pandora's box of security risks opened by researchers at [SecureWorks](https://github.com/secureworks/family-of-client-ids-research) — which refers to a group of refresh tokens that can be used to forge access tokens for any application within the same Family of Client IDs.
 
-> TL;DR: FOCI lets some Microsoft client IDs reuse refresh tokens, increasing lateral‑movement risk; this article documents common token locations (CLI, PowerShell, brokers, SPAs) and recommended mitigations — not an exhaustive inventory.
+It examines how this design choice amplifies the attack surface through Azure Entra ID tokens, focusing on where and how refresh and access tokens are stored across common application types (CLI, PowerShell, desktop brokers, mobile apps, SPAs), with concrete extraction examples. 
 
-## FOCI: What on Earth Is It?
+Broker-managed tokens are intentionally out of scope, as they are OS-protected, device-bound, and generally accessible only with system or root privileges.
 
-A group of Refresh Tokens that can be exchanged to forge access tokens for any of the applications in the Family of Client IDs. This is both practical to reduce number of sign-ins but also an opportunity for attackers to pivot to other applications in the same family..
+> **TL;DR**: *`FOCI` lets some Microsoft client IDs reuse refresh tokens. This article describe how some refresh tokens are stored, demonstrates extraction examples, and gives practical mitigations — Not an exhaustive inventory.*
 
 ## 101 Security Tokens
 
@@ -26,42 +24,30 @@ Let's start from the beginning - Microsoft Identity relies on these types of sec
 - **Refresh Token** - `"credential_type":"RefreshToken"` - An opaque token that cannot be decoded, unlike JWT. This token starts with *0.A* or *1.A* and enables the forging of new security tokens.
 
     **📝 Note:** *Unlike access tokens, the lifetime of a refresh token is [no longer customizable](https://learn.microsoft.com/en-us/answers/questions/285630/refresh-token-and-conditional-access-policy). These tokens do not contain an expiration timestamp. Instead, Entra ID has a sliding inactivity window for refresh tokens with a maximum inactivity period of **24h for SPA or 90 days for all other applications**.*
-    *Each successful use of the refresh token resets this inactivity window, allowing these tokens to persist indefinitely unless a security or policy event invalidates it (e.g. CAP, session revocation...).*
+    *Each successful use of the refresh token resets this inactivity window, allowing these tokens to persist indefinitely unless a security or policy event invalidates it (e.g. CA policy, session revocation...).*
 - **Primary Refresh Token** - The strongest type of token. It's an opaque token, device-bound and used to silently obtain [refresh and access tokens for Microsoft applications](https://learn.microsoft.com/en-us/entra/identity/devices/concept-primary-refresh-token?tabs=windows-prt-issued%2Cbrowser-behavior-windows%2Cwindows-prt-used%2Cwindows-prt-renewal%2Cwindows-prt-protection%2Cwindows-apptokens%2Cwindows-browsercookies%2Cwindows-mfa#what-is-a-prt-used-for).
 
     **📝 Note:** *Contrary to the first three tokens, the Primary Refresh Token (PRT) is not an OAuth token and is not issued via MSAL.*
 
 ➡️ <span><b>Refresh tokens are a prime target for maintaining persistence through a valid Entra ID account. And it gets even more serious with a refresh token from the Family of Client IDs (FOCI), as it can be used to generate security tokens for other applications, effectively enabling lateral movement across any other service in the FOCI list. But where can these tokens be found?</b></span>
 
-## DPAPI Decryption - Token Retrieval
+## DPAPI Decryption - Token Extraction
 
 During the exploration and hunt for tokens, proper equipment is needed to decrypt and format the various files and caches that we will encounter.
 
-Windows mostly uses **DPAPI - Data Protection API**, a built-in component that enables the storage of sensitive data. For secrets tied to a user identity, this API relies on a master key derived from the user's Windows password to encrypt the data.
+Windows mostly uses **DPAPI - Data Protection API**, a built-in component that enables the storage of sensitive data using a master key derived from the user’s Windows credentials. As a result, decrypting DPAPI-protected data requires access to the user’s machine or an active session.
 
-DPAPI decryption therefore requires access to the user’s machine or an active session. In case of compromise, an attacker could decrypt and retrieve sensitive items such as access tokens and refresh tokens.
-
-### Option A - Mimikatz
-
-- Mimikatz can target any file on the file system for decryption:
+For this article, token extraction is performed exclusively using Mimikatz which include DPAPI decryption commands:
 
 ```Powershell
 dpapi::blob /in:".\.Azure\msal_token_cache.bin" /unprotect
 dpapi::blob /in:"$env:APPDATA\Local\.IdentityService\msal.cache.cae" /unprotect
 ```
 
-- This will return binary data in hex format, that must be converted to plaintext:
+This will return binary data in hex format, that must be converted to plaintext:
 
 ```powershell
 ($binary_token_data -replace '\s','' -split '(..)' | ? {$_} | foreach($_){[char][byte]("0x$_")}) -join ''
-```
-
-### Option B - Azure Focused with SATO
-
-- [SATO](https://github.com/obikuro/Sato), Secure Azure Token Operations, includes a command to dump tokens from the Azure PowerShell cache file `msal_token_cache.bin`:
-
-```Powershell
-$CLITokenHunterResults | select UserName, refresh_token | fl > returning $CLITokenHunterResults
 ```
 
 ## Fantastical Tokens and Where to Find Them
@@ -76,7 +62,9 @@ Now that we have the proper tools to investigate, let's explore the various file
     - *For Non-Windows OS*: After authenticating with az login, a file is created on the user home directory `%USERPROFILE%/.azure/msal_token_cache.json` containing identity, access and refresh tokens in clear text.
     - *For Windows*: Since the [migration from ADAL to MSAL](https://learn.microsoft.com/fr-fr/cli/azure/msal-based-azure-cli?view=azure-cli-latest) starting from version 2.30, the tokens are stored in `%USERPROFILE%/.azure/msal_token_cache.bin`. A file that is encrypted with DPAPI - as mentioned previously, the file can still be decrypted to retrieve the tokens in clear text.
     ![AZCliTokenExample](/assets/Images/2025-12-19-FOCI/I-AzCliTokenExample.png)
-     > Client ID : 04b07795-8ddb-461a-bbee-02f9e1bf7b46 | in FOCI list : true
+    
+  > **Client ID:** `04b07795-8ddb-461a-bbee-02f9e1bf7b46`  
+  > **FOCI:** ✅ In FOCI
 
 - **`Azure PowerShell`**
     - On older versions, clear-text tokens were stored under `%USERPROFILE%/.Azure/TokensCache.dat`. 
@@ -84,9 +72,12 @@ Now that we have the proper tools to investigate, let's explore the various file
 
     ![AZPowershellTokenExample](/assets/Images/2025-12-19-FOCI/I-AzPowershellTokenExample.png)
     **📝 Note:** *Previously the file used was msal.cache before continuous access evaluation was rolled out.*
+
     **⚠️ Attention:** *Aside from DPAPI, tokens can be extracted with the command `Save-AzContext -Path ~/.Azure/azure_context.json` ...*
 
-    > Client ID : 1950a258-227b-4e31-a9cf-717495945fc2 | in FOCI list : true
+    
+  > **Client ID:** `1950a258-227b-4e31-a9cf-717495945fc2`  
+  > **FOCI:** ✅ In FOCI 
 
 - **`Microsoft Graph PowerShell`**
     - While exploring the files under `%USERPROFILE%\AppData\Local\.IdentityService` we find two files : `mg.msal.cache.cae` & `mg.msal.cache.nocae` that are encrypted with DPAPI. Upon decryption, I was able to confirm that both files save all three security tokens forged for Microsoft Graph PowerShell.
@@ -96,10 +87,8 @@ Now that we have the proper tools to investigate, let's explore the various file
         - `"app_displayname"`: "Microsoft Graph Command Line Tools"
         - `"appid"`: "14d82eec-204b-4c2f-b7e8-296a70dab67e"
     ![MGraphTokenExample](/assets/Images/2025-12-19-FOCI/I-MGraphTokenDecoded.png)
-    > Client ID : 14d82eec-204b-4c2f-b7e8-296a70dab67e | in FOCI list : false
-
-    <small><span style="color:red;"> You might get confused on the audience not matching the client ID or app ID. It will further be explained below.</span></small>
-
+  > **Client ID:** `14d82eec-204b-4c2f-b7e8-296a70dab67e`  
+  > **FOCI:** ❌ Not in FOCI
 - **`Cloud Shell`**
     - Cloud Shell launched from the Azure Portal, shell.azure.com, or any Microsoft documentation page that embeds a Cloud Shell panel (“Try It”), inherits the user’s browser session tokens. No tokens are stored in the Cloud Shell associated storage account.
 
@@ -108,10 +97,10 @@ Now that we have the proper tools to investigate, let's explore the various file
 - **`Teams Desktop`**
     - Tokens were previously stored as plain text in a SQLite database. Now stored under: `%USERPROFILE%\AppData\Local\Packages\MSTeams_8wekyb3d8bbwe\LocalCache\Microsoft\MSTeams\EBWebView\WV2Profile_tfl\Network\Cookies`
     The particularity of these tokens is that they're not encrypted with DPAPI but with Chromium as proven by the first hex binary characters in the encrypted_values : `76 31 30 -> v10`. Chromium decryption is out of scope for this article.
-    However, as demonstrated by [RandoriSec](https://blog.randorisec.fr/ms-teams-access-tokens/), the tokens can indeed be extracted after decrypting the blob.
+    As demonstrated by [RandoriSec](https://blog.randorisec.fr/ms-teams-access-tokens/), the tokens can indeed be extracted after decrypting the blob.
     ![TeamsTokenExample](/assets/Images/2025-12-19-FOCI/I-TeamsDesktopTokenExample.png)
 
-        <small><span style="color:red;"> Teams tokens can be stored under <b>WV2Profile_tfl</b> or <b>WV2Profile_tfw</b>.</span></small>
+    <small><span style="color:red; display:block; text-align:center;"> Teams tokens can be stored under <b>WV2Profile_tfl</b> or <b>WV2Profile_tfw</b>.</span></small>
 
 - **`Word, Excel, Outlook`**
     - The path `%USERPROFILE%\AppData\Local\Microsoft\TokenBroker\Cache` lists multiple .TBRES files. These files are JSON-formatted and include encrypted values (evidenced by the flag "IsProtected":true).
@@ -127,6 +116,11 @@ Now that we have the proper tools to investigate, let's explore the various file
     Under WAM, long-lived credentials such as RT and PRT are protected by OS-level security boundaries and are not persisted as application-readable artifacts, making refresh token theft infeasible without full device compromise (e.g., administrative access combined with bypass of OS security protections).
 
     In the event of system-level access, refresh tokens could potentially be abused to mint new access tokens and pivot to other applications that are part of the FOCI or the Microsoft trust chain demonstrated later in this article.
+
+> **Client IDs:** 
+> - `1fec8e78-bce4-4aaf-ab1b-5451cc387264` (Teams)
+>
+> **FOCI:** ✅ In FOCI
 
 ### Microsoft 365 Applications (Mobile)
 
@@ -163,23 +157,33 @@ Tokens are cached either by the authentication broker or within the application 
 ![ADBEnumeration](/assets/Images/2025-12-19-FOCI/I-AndroidFS.png)
 In the event of a full device compromise (root / jailbreak), refresh tokens may be exfiltrated and could potentially be used to pivot to other applications leveraging FOCI.
 
+  > **Client IDs:** 
+  >   - `27922004-5251-4030-b22d-91ecd9a37ea4` (Outlook)
+  > - `1fec8e78-bce4-4aaf-ab1b-5451cc387264` (Teams)
+  >
+  > **FOCI:** ✅ In FOCI
+
+
 ### Microsoft 365 Applications (Web)
 
 - **`Teams, Outlook & Office`**
     - The browser keeps in its local storage a refresh token that is like all SPA, 24 hours long but this time, an opaque token starting with'M.' that differs from the Entra ID refresh token.
     The access token is also stored but in JWE format (Json Web Encryption) instead of the usual JWT or JWS format. With JWE, the token is encrypted with Microsoft's internal keys, so it cannot be decrypted locally.
 
-    > **Teams Web** - Client ID : 4b3e8f46-56d3-427f-b1e2-d239b2ea6bca | in FOCI list : false
+> **Client IDs:** 
+> - `4b3e8f46-56d3-427f-b1e2-d239b2ea6bca`
+> - `6b2d4bcd-1806-45eb-9a26-867acb42ab76`
+> - `2821b473-fe24-4c86-ba16-62834d6e80c3`
+>
+> **FOCI:** ❌ Not in FOCI
 
-    > **Outlook Web** - Client ID : 6b2d4bcd-1806-45eb-9a26-867acb42ab76 | in FOCI list : false
-
-    > **Word, Excel, PPT, OneNote Web** - Client ID : 2821b473-fe24-4c86-ba16-62834d6e80c3 | in FOCI list : false
 
 ### Azure Portal
 
  - For [Azure Portal](https://portal.azure.com/#home), the security tokens: refresh and access, are stored in the browser's session storage rather than the local storage. The tokens are therefore removed once the tab is closed, reducing the exposure to the attacks mentioned previously.
 
-    > Client ID : c44b4083-3bb0-49c1-b47d-974e53cbdf3c | in FOCI list : false
+  > **Client ID:** `c44b4083-3bb0-49c1-b47d-974e53cbdf3c`  
+  > **FOCI:** ❌ Not in FOCI
 
 **📝 Note:** *SPAs like the two previous categories, seem to prevent the reuse of Entra ID refresh tokens to mint new tokens outside of the browser context - as illustrated by the error observed below when attempting refresh token reuse :*
 ![SPATokenReuseError](/assets/Images/2025-12-19-FOCI/SPAError.png)
@@ -254,4 +258,4 @@ As with any shared responsibility model, organizations must complement these pro
 
 **📝 Note:** *The mitigations described above reduce the likelihood and impact of token compromise but do not fully eliminate it. Tokens remain exploitable if an attacker gains full access to a device or exfiltrates a refresh token for a client / device for which CAE or Token Protection is not yet supported.*
 
-And that’s a wrap, folks – FOCI highlights how token portability can increase risk, but understanding token storage, browser and device boundaries, and applying the proper organizational controls can significantly reduce exposure.
+That’s a wrap ! – FOCI highlights how token portability can increase risk, but understanding token storage, browser and device boundaries, and applying the proper organizational controls can significantly reduce exposure.
