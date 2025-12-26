@@ -118,7 +118,8 @@ Now that we have the proper tools to investigate, let's explore the various file
     In the event of system-level access, refresh tokens could potentially be abused to mint new access tokens and pivot to other applications that are part of the FOCI or the Microsoft trust chain demonstrated later in this article.
 
 > **Client IDs:** 
-> - `1fec8e78-bce4-4aaf-ab1b-5451cc387264` (Teams)
+> - `1fec8e78-bce4-4aaf-ab1b-5451cc387264` (Microsoft Teams)
+> - `d3590ed6-52b3-4102-aeff-aad2292ab01c` (Microsoft Office)
 >
 > **FOCI:** ✅ In FOCI
 
@@ -158,8 +159,9 @@ Tokens are cached either by the authentication broker or within the application 
 In the event of a full device compromise (root / jailbreak), refresh tokens may be exfiltrated and could potentially be used to pivot to other applications leveraging FOCI.
 
   > **Client IDs:** 
-  >   - `27922004-5251-4030-b22d-91ecd9a37ea4` (Outlook)
-  > - `1fec8e78-bce4-4aaf-ab1b-5451cc387264` (Teams)
+  > - `27922004-5251-4030-b22d-91ecd9a37ea4` (Outlook Mobile)
+  > - `1fec8e78-bce4-4aaf-ab1b-5451cc387264` (Microsoft Teams)
+  > - `d3590ed6-52b3-4102-aeff-aad2292ab01c` (Microsoft Office)
   >
   > **FOCI:** ✅ In FOCI
 
@@ -250,10 +252,14 @@ Significant efforts have been made to reduce the exposure and portability of aut
 
 As with any shared responsibility model, organizations must complement these protections:
 
-- Awareness, awareness, awareness : Sensitize users and administrators on OAuth phishing techniques such as device code abuse.
-- Conditional Access policies: Enable Continuous Access Evaluation ([limitations](https://learn.microsoft.com/en-us/entra/identity/conditional-access/concept-continuous-access-evaluation?conditional-access-policy-evaluation)) and Token Protection ([limitations](https://learn.microsoft.com/en-us/entra/identity/conditional-access/concept-token-protection#requirements)). In the policy, enforce MFA, device compliance, and rapidly invalidate sessions when risk changes.
-- Harden automation tooling : Regularly update Azure CLI, PowerShell, and SDKs, and protect local token caches.
-- Monitoring and logging : Detect anomalous sign-ins, unexpected client usage, and token replay patterns using identity logs and analytics, and respond by revoking or blocking affected sessions.
+- Awareness, awareness, awareness: Sensitize users and administrators on OAuth phishing techniques such as device code abuse.
+- Endpoint protection: Secure all devices (computers & mobiles) accessing corporate resources with disk encryption, strong authentication, auto-lock, and remote wipe in case of theft or loss.
+- Conditional Access policies: Enable Continuous Access Evaluation and Token Protection. In the policy, enforce MFA, device compliance, and rapidly invalidate sessions when risk changes.
+  
+  **⚠️ Attention:** *[Continuous Access Evaluation](https://learn.microsoft.com/en-us/entra/identity/conditional-access/concept-continuous-access-evaluation?conditional-access-policy-evaluation) and [Token Protection](https://learn.microsoft.com/en-us/entra/identity/conditional-access/concept-token-protection#requirements) are currently enforced only for a subset of services, including Office 365 online, and mitigate certain access-token misuse scenarios when tokens are used from untrusted devices, IP addresses, or locations.*
+
+- Harden automation tooling: Regularly update Azure CLI, PowerShell, and SDKs, and protect local token caches.
+- Monitoring and logging: Detect anomalous sign-ins, unexpected client usage, and token replay patterns using identity logs and analytics, and respond by revoking or blocking affected sessions.
 - Limit token persistence where possible : Disable context autosave or persistent sessions in sensitive environments (Disable-AzContextAutosave).
 
 **📝 Note:** *The mitigations described above reduce the likelihood and impact of token compromise but do not fully eliminate it. Tokens remain exploitable if an attacker gains full access to a device or exfiltrates a refresh token for a client / device for which CAE or Token Protection is not yet supported.*
