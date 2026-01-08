@@ -7,24 +7,27 @@ categories: [Azure, Azure Entra ID]
 tags: [aad,entra id,msal,tokens,azure,security]     # TAG names should always be lowercase
 ---
 
-This article takes a closer look at FOCI — a Pandora's box of security risks opened by researchers at [SecureWorks](https://github.com/secureworks/family-of-client-ids-research) — which refers to a group of refresh tokens that can be used to forge access tokens for any application within the same Family of Client IDs.
+<small><span style="color:red; display:block; text-align:center;"> ⚠️ This article is for educational and defensive purposes only.<br>
+Use demonstrated techniques only in environments you are authorized to test.</span></small>
 
-It examines how this design choice amplifies the attack surface through Azure Entra ID tokens, focusing on where and how refresh and access tokens are stored across common application types (CLI, PowerShell, desktop brokers, mobile apps, SPAs), with concrete extraction examples. 
+*This article takes a closer look at FOCI — a Pandora's box of security risks opened by researchers at [SecureWorks](https://github.com/secureworks/family-of-client-ids-research) — which refers to a group of refresh tokens that can be used to forge access tokens for any application within the same Family of Client IDs.*
 
-Broker-managed tokens are intentionally out of scope, as they are OS-protected, device-bound, and generally accessible only with system or root privileges.
+*It examines how this design choice amplifies the attack surface through Azure Entra ID tokens, focusing on where and how refresh and access tokens are stored across common application types (CLI, PowerShell, desktop brokers, mobile apps, SPAs), with concrete extraction examples.*
 
-> **TL;DR**: *`FOCI` lets some Microsoft client IDs reuse refresh tokens. This article describe how some refresh tokens are stored, demonstrates extraction examples, and gives practical mitigations — Not an exhaustive inventory.*
+*Broker-managed tokens are intentionally out of scope, as they are OS-protected, device-bound, and generally accessible only with system or root privileges.*
+
+> **TL;DR**: *`FOCI` lets some Microsoft client IDs reuse refresh tokens. This article describes how some refresh tokens are stored, demonstrates extraction examples, and gives practical mitigations — Not an exhaustive inventory.*
 
 ## 101 Security Tokens
 
 Let's start from the beginning - Microsoft Identity relies on these types of security tokens:
 
 - **Identity Token** - `"credential_type":"IdToken"` - A proof of authentication. A JWT token containing user information used in some OpenID Connect flows.
-- **Access Token** - `"credential_type":"AccessToken"` - A JWT token confirming the right to access the resource. The access token provides temporary access (between **60 and 90 minutes**), to the resource server for which it is scoped. The token's [lifetime could be customizable](https://learn.microsoft.com/en-us/entra/identity-platform/configurable-token-lifetimes) for applications and some service principals.
+- **Access Token** - `"credential_type":"AccessToken"` - A JWT token confirming the right to access the resource. The access token provides temporary access (between **60 and 90 minutes**) to the resource server for which it is scoped. The token's [lifetime may be configurable](https://learn.microsoft.com/en-us/entra/identity-platform/configurable-token-lifetimes) for applications and some service principals.
 - **Refresh Token** - `"credential_type":"RefreshToken"` - An opaque token that cannot be decoded, unlike JWT. This token starts with *0.A* or *1.A* and enables the forging of new security tokens.
 
-    **📝 Note:** *Unlike access tokens, the lifetime of a refresh token is [no longer customizable](https://learn.microsoft.com/en-us/answers/questions/285630/refresh-token-and-conditional-access-policy). These tokens do not contain an expiration timestamp. Instead, Entra ID has a sliding inactivity window for refresh tokens with a maximum inactivity period of **24h for SPA or 90 days for all other applications**.*
-    *Each successful use of the refresh token resets this inactivity window, allowing these tokens to persist indefinitely unless a security or policy event invalidates it (e.g. CA policy, session revocation...).*
+    **📝 Note:** *Unlike access tokens, the lifetime of a refresh token is [no longer customizable](https://learn.microsoft.com/en-us/answers/questions/285630/refresh-token-and-conditional-access-policy). These tokens do not contain an expiration timestamp. Instead, Entra ID has a sliding inactivity window for refresh tokens with a maximum inactivity period of **24 hours for SPA or 90 days for other applications**.*
+    *Each successful use of the refresh token resets this inactivity window, allowing these tokens to persist indefinitely unless a security or policy event invalidates them (e.g. CA policy, session revocation...).*
 - **Primary Refresh Token** - The strongest type of token. It's an opaque token, device-bound and used to silently obtain [refresh and access tokens for Microsoft applications](https://learn.microsoft.com/en-us/entra/identity/devices/concept-primary-refresh-token?tabs=windows-prt-issued%2Cbrowser-behavior-windows%2Cwindows-prt-used%2Cwindows-prt-renewal%2Cwindows-prt-protection%2Cwindows-apptokens%2Cwindows-browsercookies%2Cwindows-mfa#what-is-a-prt-used-for).
 
     **📝 Note:** *Contrary to the first three tokens, the Primary Refresh Token (PRT) is not an OAuth token and is not issued via MSAL.*
@@ -37,7 +40,7 @@ During the exploration and hunt for tokens, proper equipment is needed to decryp
 
 Windows mostly uses **DPAPI - Data Protection API**, a built-in component that enables the storage of sensitive data using a master key derived from the user’s Windows credentials. As a result, decrypting DPAPI-protected data requires access to the user’s machine or an active session.
 
-For this article, token extraction is performed exclusively using Mimikatz which include DPAPI decryption commands:
+For this article, token extraction is performed exclusively using Mimikatz, which include DPAPI decryption commands:
 
 ```Powershell
 dpapi::blob /in:".\.Azure\msal_token_cache.bin" /unprotect
@@ -59,8 +62,8 @@ Now that we have the proper tools to investigate, let's explore the various file
 ### Automation & CLI Tools
 
 - **`Azure CLI`** 
-    - *For Non-Windows OS*: After authenticating with az login, a file is created on the user home directory `%USERPROFILE%/.azure/msal_token_cache.json` containing identity, access and refresh tokens in clear text.
-    - *For Windows*: Since the [migration from ADAL to MSAL](https://learn.microsoft.com/fr-fr/cli/azure/msal-based-azure-cli?view=azure-cli-latest) starting from version 2.30, the tokens are stored in `%USERPROFILE%/.azure/msal_token_cache.bin`. A file that is encrypted with DPAPI - as mentioned previously, the file can still be decrypted to retrieve the tokens in clear text.
+    - *On Non-Windows systems*: After authenticating with az login, a file is created in the user's home directory `%USERPROFILE%/.azure/msal_token_cache.json` containing identity, access and refresh tokens in clear text.
+    - *On Windows*: Since the [migration from ADAL to MSAL](https://learn.microsoft.com/fr-fr/cli/azure/msal-based-azure-cli?view=azure-cli-latest) starting from version 2.30, the tokens are stored in `%USERPROFILE%/.azure/msal_token_cache.bin`. This file that is encrypted with DPAPI - as mentioned previously, the file can still be decrypted to retrieve the tokens in clear text.
     ![AZCliTokenExample](/assets/Images/2025-12-19-FOCI/I-AzCliTokenExample.png)
     
   > **Client ID:** `04b07795-8ddb-461a-bbee-02f9e1bf7b46`  
@@ -80,9 +83,9 @@ Now that we have the proper tools to investigate, let's explore the various file
   > **FOCI:** ✅ In FOCI 
 
 - **`Microsoft Graph PowerShell`**
-    - While exploring the files under `%USERPROFILE%\AppData\Local\.IdentityService` we find two files : `mg.msal.cache.cae` & `mg.msal.cache.nocae` that are encrypted with DPAPI. Upon decryption, I was able to confirm that both files save all three security tokens forged for Microsoft Graph PowerShell.
+    - While exploring the files under `%USERPROFILE%\AppData\Local\.IdentityService` we find two files: `mg.msal.cache.cae` & `mg.msal.cache.nocae` that are encrypted with DPAPI. Upon decryption, I was able to confirm that both files save all three security tokens forged for Microsoft Graph PowerShell.
     ![MGraphTokenExample](/assets/Images/2025-12-19-FOCI/I-MGraphTokenExample.png)
-    Decoding the access token we read the following information, confirming our assumption:
+    Decoding the access token, we read the following information, confirming our assumption:
         - `"aud"`: "00000003-0000-0000-c000-000000000000"
         - `"app_displayname"`: "Microsoft Graph Command Line Tools"
         - `"appid"`: "14d82eec-204b-4c2f-b7e8-296a70dab67e"
@@ -96,7 +99,7 @@ Now that we have the proper tools to investigate, let's explore the various file
 
 - **`Teams Desktop`**
     - Tokens were previously stored as plain text in a SQLite database. Now stored under: `%USERPROFILE%\AppData\Local\Packages\MSTeams_8wekyb3d8bbwe\LocalCache\Microsoft\MSTeams\EBWebView\WV2Profile_tfl\Network\Cookies`
-    The particularity of these tokens is that they're not encrypted with DPAPI but with Chromium as proven by the first hex binary characters in the encrypted_values : `76 31 30 -> v10`. Chromium decryption is out of scope for this article.
+    These tokens are not encrypted with DPAPI but with Chromium, as indicated by the first hex binary characters in the encrypted_values : `76 31 30 -> v10`. Chromium decryption is out of scope for this article.
     As demonstrated by [RandoriSec](https://blog.randorisec.fr/ms-teams-access-tokens/), the tokens can indeed be extracted after decrypting the blob.
     ![TeamsTokenExample](/assets/Images/2025-12-19-FOCI/I-TeamsDesktopTokenExample.png)
 
@@ -125,11 +128,11 @@ Now that we have the proper tools to investigate, let's explore the various file
 
 ### Microsoft 365 Applications (Mobile)
 
-Using a debugger with the outlook mobile app for Android, we observe that MSAL acquires and caches tokens via a broker application such as Microsoft Authenticator.  
+Using a debugger with the Outlook mobile app for Android, we observe that MSAL acquires and caches tokens via a broker application such as Microsoft Authenticator.  
 When a broker is present, it manages account sessions and handles refresh token usage.
 Tokens are therefore not stored in directly accessible storage and require root access to the mobile device to be retrieved.
 
-In the observed below logs, we notice that:
+In the logs observed below, we notice that:
 
 - MSAL serves valid access tokens from its internal cache (`isFromCache: true`) without network calls.  
 - The application delegates authentication to the broker, in this case Microsoft Authenticator for Android - `com.azure.authenticator`, which silently acquires access tokens using its managed refresh tokens: `Broker operation name: MSAL_ACQUIRE_TOKEN_SILENT brokerPackage: com.azure.authenticator`.
@@ -154,7 +157,7 @@ According to MSAL [release notes](https://devblogs.microsoft.com/microsoft365dev
 
 MSAL delegates token acquisition to the first available broker installed, and if none is found, MSAL will fall back to a [system browser](https://learn.microsoft.com/en-us/entra/msal/android/single-sign-on?sso-through-system-browser).
 
-Tokens are cached either by the authentication broker or within the application storage. On Android, this storage resides under /data which cannot be enumerated on modern non-rooted devices:
+Tokens are cached either by the authentication broker or within the application storage. On Android, this storage resides under /data, which cannot be enumerated on modern non-rooted devices:
 ![ADBEnumeration](/assets/Images/2025-12-19-FOCI/I-AndroidFS.png)
 In the event of a full device compromise (root / jailbreak), refresh tokens may be exfiltrated and could potentially be used to pivot to other applications leveraging FOCI.
 
@@ -169,8 +172,8 @@ In the event of a full device compromise (root / jailbreak), refresh tokens may 
 ### Microsoft 365 Applications (Web)
 
 - **`Teams, Outlook & Office`**
-    - The browser keeps in its local storage a refresh token that is like all SPA, 24 hours long but this time, an opaque token starting with'M.' that differs from the Entra ID refresh token.
-    The access token is also stored but in JWE format (Json Web Encryption) instead of the usual JWT or JWS format. With JWE, the token is encrypted with Microsoft's internal keys, so it cannot be decrypted locally.
+    - The browser keeps in its local storage a refresh token that, like all SPA tokens, is 24 hours long; however this token is opaque and starts with'M.' which differs from the Entra ID refresh token.
+    The access token is also stored but in JWE format (JSON Web Encryption) instead of the usual JWT or JWS format. With JWE, the token is encrypted with Microsoft's internal keys, so it cannot be decrypted locally.
 
 > **Client IDs:** 
 > - `4b3e8f46-56d3-427f-b1e2-d239b2ea6bca`
@@ -190,27 +193,91 @@ In the event of a full device compromise (root / jailbreak), refresh tokens may 
 **📝 Note:** *SPAs like the two previous categories, seem to prevent the reuse of Entra ID refresh tokens to mint new tokens outside of the browser context - as illustrated by the error observed below when attempting refresh token reuse :*
 ![SPATokenReuseError](/assets/Images/2025-12-19-FOCI/SPAError.png)
 
-## TokenTactics — Refresh Token Reuse
+## From One to Many - FOCI Abuse in Practice
 
-While decrypting the previous files, we noticed multiple fields, we'll focus on *client_id* (after all, it's in the title) and *aud*, *scp* :
+A common attack vector is the OAuth Device Authorization flow which is usually used for devices with limited input capabilities (e.g. IoT device). This OAuth flow relies on a code `device code` generated for each authorization request, which must be provided by the user during authentication within ~15min following the request initiation. While this time constraint may seem to lower the likelihood of successful phishing attacks, multiple tricks can extend the viability of these attackes either by repeatidly reinitiating the flow and providing the updated device codes to the victim or by delaying the initiation of the request. 
 
-- **client_id** : Value in the token entry (outside of the token itself), points to the application sending the authentication request (*caller / client*).
-- **aud** : Value inside the token, points to the targeted application who your token is meant for (*resource server*).
-- **scp** : Value inside the token, reflects the permissions in the scope of the access token.
+One of these tricks comes prepackaged in the tool `Squarephish`: A tool relying on a QR code to deliver the device code flow. 
 
-Client IDs belonging to the FOCI list can be used interchangeably to forge new security tokens for any application listed in the Family of Client IDs.
+Let's observe how it works and install it on an Azure VM. Before it can be used the proper configuration in settings.config:
 
-➡️ <span style="color:darkred;"><b>Which means that in the case of the theft of a single refresh token, the blast radius includes all applications in the FOCI list.</b></span>
+  ````text
+  [DEFAULT]
+  SMTP_PORT            = 465                                               
+  SMTP_SERVER          = "smtp.gmail.com"                                              
+  SMTP_PROTO           = "ssl"                                             SMTP_EMAIL           = "...@gmail.com"         
+  SMTP_PASSWORD        = "..."
 
-Let's demonstrate with Az CLI security tokens, using the previously discussed extraction techniques, we retrieve the refresh token stored in `msal_token_cache.json`:
-![RefreshTokenExtraction](/assets/Images/2025-12-19-FOCI/II-AzCliExtractedRefreshToken.png)
-Using TokenTactics, we can forge new security tokens for a FOCI Client ID:
-![RefreshTokenTactics](/assets/Images/2025-12-19-FOCI/II-AzCliRefreshToMsGraph.png)
-For those paying attention, you might notice that the client ID for Microsoft Graph PowerShell is not listed under FOCI. However, with TokenTactics, the client ID used is `d3590ed6-52b3-4102-aeff-aad2292ab01c` which is for Microsoft Office. The security tokens returned by TokenTactics have the correct graph audience and the scopes `Directory.#` enabling their use by Microsoft Graph PowerShell.
+  [EMAIL]
+  SQUAREPHISH_SERVER   = "VM_Public_IP"              
+  SQUAREPHISH_PORT     = 443                  
+  SQUAREPHISH_ENDPOINT = "/mfa"                 
+  FROM_EMAIL           = "admin@square.phish"    
+  SUBJECT              = "ACTION REQUIRED: Multi-Factor Authentication (MFA) Update"              
+  EMAIL_TEMPLATE       = "pretexts/mfa/qrcode_email.html"                                         
 
-**🎯 Key Insight:** *In addition to FOCI, an additional nuance is a hidden trust model between some Microsoft Client IDs which enables access tokens to be validated based on their audience and scopes, rather than on the original caller client ID.*
+  [SERVER]
+  PORT                 = 443
+  FROM_EMAIL           = "admin@square.phish"   
+  SUBJECT              = "ACTION REQUIRED: Multi-Factor Authentication (MFA) Update"              
+  CLIENT_ID            = "4813382a-8fa7-425e-ab75-3b753aab3abb"   
+  ENDPOINT             = "/mfa"                 
+  CERT_CRT             = "PATH_TO_CERT"                     
+  CERT_KEY             = "PATH_TO_PRIVATE_KEY"                     
+  EMAIL_TEMPLATE       = "pretexts/mfa/devicecode_email.html"                                     
+  PERMISSION_SCOPE     = ".default offline_access profile openid"    
+  ````
+**[DEFAULT] Settings**:
+  - For the sake of a quick demo, leaving the default smtp server to gmail, where more sophisticated attacks rely on custom domain name and smtp server.
+  - Gmail does not support (for good reasons) the use of user password in non-interactive flows and requires the use of OAuth keys or [application passwords](https://support.google.com/mail/answer/185833?hl=en).
+  - Squarephish supports the latter, so the first step is to generate an application password for the account that will send the phishing email.
 
-*This behavior adds an important perspective on the blast radius that can be achieved with an Entra ID refresh token. While arbitrary client IDs are not accepted - even if the audience and scopes appear valid - access tokens do not need to originate from the same client ID as the calling application. As long as the token is issued to a Microsoft-owned application recognized by Entra ID, targets the correct resource audience, and includes the required scopes, token reuse across applications remains possible.*
+**[EMAIL] Settings**:
+- In order to catch the victim's response, the Public IP address of an Azure VM will be provided in the field `SQUAREPHISH_SERVER`.
+- The network security groups inbound policies must be adapted to allow inbound flow on the port specified in `SQUAREPHISH_PORT`.
+
+**[SERVER] Settings**:
+- For our Azure VM setup a certificate must be generated to enable SSL/TLS, in our case a self-signed one would suffice:
+  ```bash
+  openssl req -x509 -newkey rsa:2048 -keyout squarephish.key -out squarephish.crt -days 365 -nodes
+  ``` 
+- The paths to the public key cryptography objects must be specified in the fields `CERT_CRT` and `CERT_KEY`.
+
+Once this configuration is applied we send a first email to our victim using the SquarePhish default template requesting MFA reconfiguration:
+![SquarePhishInitCmd](/assets/Images/2025-12-19-FOCI/III-SquarePhishSend.png)
+![SquarePhishInitEmail](/assets/Images/2025-12-19-FOCI/III-SquarePhishEmail.png)
+At this stage, the SquarePhish server must be launched as a listener that will receive the target's requests. Upon scanning the QR code we receive a second email with the device code and the page is redirected to the authentication page:
+![SquarePhishInitServer](/assets/Images/2025-12-19-FOCI/III-SquarePhishServer.png)
+![SquarePhishDeviceCode](/assets/Images/2025-12-19-FOCI/III-SquarePhishEmailDeviceCode.png)
+Once the authentication is complete our server retrieves the three security tokens:
+![SquarePhishTokenFile](/assets/Images/2025-12-19-FOCI/III-SquarePhishTokensRetrieved.png)
+![SquarePhishTokens](/assets/Images/2025-12-19-FOCI/III-SquarePhishRefreshToken.png)
+
+We can now use the retrieved refresh token to mint new access tokens to other services that are part of the FOCI!
+
+Using TokenTactics, let's leverage the refresh token to obtain access tokens for Microsoft Graph: 
+![RefreshTokenTactics](/assets/Images/2025-12-19-FOCI/III-TacticsRefreshToMsGraph.png)
+
+For those paying attention, you may notice that the client ID for Microsoft Graph PowerShell is **not listed under FOCI**, yet we successfully retrieved and used a valid access token.
+
+Take a deep breath and let's pause briefly to decode our access token and analyze its claims:
+![RefreshTokenTactics](/assets/Images/2025-12-19-FOCI/III-TacticsRefreshToMsGraphDecoded.png)
+
+- **appid** : Points to the application for which the token was issued (*OAuth client*).
+- **aud** : Identifies the targeted application which your token is meant for (*resource server*).
+- **scp** : Reflects the delegated permissions in the scope of the access token.
+
+With TokenTactics, the refresh token was redeemed using Microsoft Office application ID `d3590ed6-52b3-4102-aeff-aad2292ab01c` which is indeed in the FOCI list. However, the audience is correctly scoped to Microsoft Graph and the permissions, e.g., `Directory.#` enabled the token to be accepted and used by Microsoft Graph PowerShell.
+
+**🎯 Key Insight:** *In addition to FOCI, an additional nuance is a trust model between some Microsoft applications which enables access tokens to be validated based on their audience and scopes, rather than strictly on the original caller client ID.*
+
+*This behavior adds an important perspective on the blast radius that can be achieved with an Entra ID refresh token. While arbitrary Client IDs are not accepted - even if the audience and scopes appear valid - access tokens do not need to originate from the same client ID as the target service. As long as the token is issued to a Microsoft-owned application recognized by Entra ID, targets the correct resource audience, and includes the required permissions, token reuse across supported Microsoft applications remains possible.*
+
+We've now established that Client IDs belonging to the FOCI list can be used interchangeably to forge new security tokens for any application listed in the Family of Client IDs.
+
+➡️ <span style="color:darkred;"><b>This means that in the case of the theft of a single refresh token, the blast radius includes all applications in the FOCI list.</b></span>
+
+But once a refresh token is compromised, how effective are revocation mechanisms in limiting its blast radius?
 
 As documented in this [Microsoft security blog post](https://www.microsoft.com/en-us/security/blog/2022/11/16/token-tactics-how-to-prevent-detect-and-respond-to-cloud-token-theft/), multiple events can invalidate refresh tokens with varying degrees of effectiveness.
 
@@ -218,13 +285,13 @@ FOCI allows a refresh token obtained for one application to be reused to silentl
 ![RevokingSessions](/assets/Images/2025-12-19-FOCI/II-AzCliRevokeAllSessions.png)
 Using the `Revoke sessions` feature in Entra ID effectively logs out the user and revokes the security tokens for the Portal stored in the browser session storage.
 It blocks any attempts to forge new security tokens using previously generated refresh tokens.
-However any existing access tokens are still usable until their expiration (expires_in: 7200 ~ 2h)
+However, any existing access tokens are still usable until their expiration (expires_in: 7200 ~ 2h)
 
 ![RevokingSessions](/assets/Images/2025-12-19-FOCI/II-AzCliAfterRevocation.png)
 
 ➡️ <span><b>Revoking sign-in sessions invalidates browser sessions and prevents users from acquiring new tokens. Existing access tokens remain valid until expiration.</b></span>
 
-## FOCI Threat Model at a Glance
+### FOCI Threat Model at a Glance
 
 Multiple scenarios could allow an attacker to exfiltrate security tokens. At a high level, two main vectors emerge:
 
@@ -254,10 +321,13 @@ As with any shared responsibility model, organizations must complement these pro
 
 - Awareness, awareness, awareness: Sensitize users and administrators on OAuth phishing techniques such as device code abuse.
 - Endpoint protection: Secure all devices (computers & mobiles) accessing corporate resources with disk encryption, strong authentication, auto-lock, and remote wipe in case of theft or loss.
-- Conditional Access policies: Enable Continuous Access Evaluation and Token Protection. In the policy, enforce MFA, device compliance, and rapidly invalidate sessions when risk changes.
+- Conditional Access policies: Enable Continuous Access Evaluation and Token Protection. In the policy:
+  - Enforce MFA, device compliance, and rapidly invalidate sessions when risk changes.
+  - Restrict device code authentication via CAP to only the users or devices that truly require it.
   
   **⚠️ Attention:** *[Continuous Access Evaluation](https://learn.microsoft.com/en-us/entra/identity/conditional-access/concept-continuous-access-evaluation?conditional-access-policy-evaluation) and [Token Protection](https://learn.microsoft.com/en-us/entra/identity/conditional-access/concept-token-protection#requirements) are currently enforced only for a subset of services, including Office 365 online, and mitigate certain access-token misuse scenarios when tokens are used from untrusted devices, IP addresses, or locations.*
 
+- Limit device code authentication: Restrict the use of this authentication mode via Conditional Access Policies (CAP) to only the users or devices that truly require it.
 - Harden automation tooling: Regularly update Azure CLI, PowerShell, and SDKs, and protect local token caches.
 - Monitoring and logging: Detect anomalous sign-ins, unexpected client usage, and token replay patterns using identity logs and analytics, and respond by revoking or blocking affected sessions.
 - Limit token persistence where possible : Disable context autosave or persistent sessions in sensitive environments (Disable-AzContextAutosave).
