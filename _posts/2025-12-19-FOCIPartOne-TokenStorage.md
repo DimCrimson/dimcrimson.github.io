@@ -1,22 +1,33 @@
 ---
-title: Family of Client IDs - Microsoft’s Pivot Playground
+title: Family of Client IDs - Microsoft’s Pivot Playground (Part 1)
 date: 2025-12-19 23:00:00 +0000
-description: A practical guide to FOCI-driven token reuse 🔍
+description: A practical guide to FOCI-driven token reuse, focusing on token types and storage locations across selected Microsoft applications.
 comments: false
 categories: [Azure, Azure Entra ID]
-tags: [aad,entra id,msal,tokens,azure,security]     # TAG names should always be lowercase
+tags: [aad,entra id,foci,tokens,azure,identity,security]     # TAG names should always be lowercase
 ---
 
 <small><span style="color:red; display:block; text-align:center;"> ⚠️ This article is for educational and defensive purposes only.<br>
 Use demonstrated techniques only in environments you are authorized to test.</span></small>
 
-*This article takes a closer look at FOCI — a Pandora's box of security risks opened by researchers at [SecureWorks](https://github.com/secureworks/family-of-client-ids-research) — which refers to a group of refresh tokens that can be used to forge access tokens for any application within the same Family of Client IDs.*
+*This article is part of a two-part series exploring FOCI — a Pandora's box of security risks opened by researchers at [SecureWorks](https://github.com/secureworks/family-of-client-ids-research) — which refers to a group of refresh tokens that can be used to forge access tokens for any application within the same Family of Client IDs.*
 
-*It examines how this design choice amplifies the attack surface through Azure Entra ID tokens, focusing on where and how refresh and access tokens are stored across common application types (CLI, PowerShell, desktop brokers, mobile apps, SPAs), with concrete extraction examples.*
+*Part 1 focuses on the foundations: a high-level look at Azure Entra ID security tokens (ID, access, and refresh tokens) and where these tokens are stored across common Microsoft application types (CLI tools, PowerShell, desktop apps, and mobile clients), with concrete extraction examples - Examples are illustrative, not exhaustive.*
+
+*Part 2 builds on this groundwork to demonstrate how a refresh token can be abused to obtain access tokens for other FOCI-enabled applications, explores realistic threat actor scenarios, and discusses defensive mitigations.*
 
 *Broker-managed tokens are intentionally out of scope, as they are OS-protected, device-bound, and generally accessible only with system or root privileges.*
 
-> **TL;DR**: *`FOCI` lets some Microsoft client IDs reuse refresh tokens. This article describes how some refresh tokens are stored, demonstrates extraction examples, and gives practical mitigations — Not an exhaustive inventory.*
+> **TL;DR**: *`FOCI` lets some Microsoft client IDs reuse refresh tokens. This first part explains token fundamentals and storage locations. The second part will show how this behavior can be abused — and how to mitigate the risk.*
+
+---
+
+<div style="text-align: right;" markdown="1">
+📎 **Series note**  
+This article is Part 1 of a two-part series on FOCI.  
+→ Continue with [**Part 2: Abuse paths and mitigations**](/posts/FOCIPartTwo-ExploitationDefense/)
+</div>
+---
 
 ## 101 Security Tokens
 
@@ -193,145 +204,8 @@ In the event of a full device compromise (root / jailbreak), refresh tokens may 
 **📝 Note:** *SPAs like the two previous categories, seem to prevent the reuse of Entra ID refresh tokens to mint new tokens outside of the browser context - as illustrated by the error observed below when attempting refresh token reuse :*
 ![SPATokenReuseError](/assets/Images/2025-12-19-FOCI/SPAError.png)
 
-## From One to Many - FOCI Abuse in Practice
+## Conclusion
 
-A common attack vector is the OAuth Device Authorization flow which is usually used for devices with limited input capabilities (e.g. IoT device). This OAuth flow relies on a code `device code` generated for each authorization request, which must be provided by the user during authentication within ~15min following the request initiation. While this time constraint may seem to lower the likelihood of successful phishing attacks, multiple tricks can extend the viability of these attackes either by repeatidly reinitiating the flow and providing the updated device codes to the victim or by delaying the initiation of the request. 
+That’s a wrap ! – FOCI highlights how token portability can increase risk — understanding token types and where they are stored is a necessary first step before assessing real-world impact.
 
-One of these tricks comes prepackaged in the tool `Squarephish`: A tool relying on a QR code to deliver the device code flow. 
-
-Let's observe how it works and install it on an Azure VM. Before it can be used the proper configuration in settings.config:
-
-  ````text
-  [DEFAULT]
-  SMTP_PORT            = 465                                               
-  SMTP_SERVER          = "smtp.gmail.com"                                              
-  SMTP_PROTO           = "ssl"                                             SMTP_EMAIL           = "...@gmail.com"         
-  SMTP_PASSWORD        = "..."
-
-  [EMAIL]
-  SQUAREPHISH_SERVER   = "VM_Public_IP"              
-  SQUAREPHISH_PORT     = 443                  
-  SQUAREPHISH_ENDPOINT = "/mfa"                 
-  FROM_EMAIL           = "admin@square.phish"    
-  SUBJECT              = "ACTION REQUIRED: Multi-Factor Authentication (MFA) Update"              
-  EMAIL_TEMPLATE       = "pretexts/mfa/qrcode_email.html"                                         
-
-  [SERVER]
-  PORT                 = 443
-  FROM_EMAIL           = "admin@square.phish"   
-  SUBJECT              = "ACTION REQUIRED: Multi-Factor Authentication (MFA) Update"              
-  CLIENT_ID            = "4813382a-8fa7-425e-ab75-3b753aab3abb"   
-  ENDPOINT             = "/mfa"                 
-  CERT_CRT             = "PATH_TO_CERT"                     
-  CERT_KEY             = "PATH_TO_PRIVATE_KEY"                     
-  EMAIL_TEMPLATE       = "pretexts/mfa/devicecode_email.html"                                     
-  PERMISSION_SCOPE     = ".default offline_access profile openid"    
-  ````
-**[DEFAULT] Settings**:
-  - For the sake of a quick demo, leaving the default smtp server to gmail, where more sophisticated attacks rely on custom domain name and smtp server.
-  - Gmail does not support (for good reasons) the use of user password in non-interactive flows and requires the use of OAuth keys or [application passwords](https://support.google.com/mail/answer/185833?hl=en).
-  - Squarephish supports the latter, so the first step is to generate an application password for the account that will send the phishing email.
-
-**[EMAIL] Settings**:
-- In order to catch the victim's response, the Public IP address of an Azure VM will be provided in the field `SQUAREPHISH_SERVER`.
-- The network security groups inbound policies must be adapted to allow inbound flow on the port specified in `SQUAREPHISH_PORT`.
-
-**[SERVER] Settings**:
-- For our Azure VM setup a certificate must be generated to enable SSL/TLS, in our case a self-signed one would suffice:
-  ```bash
-  openssl req -x509 -newkey rsa:2048 -keyout squarephish.key -out squarephish.crt -days 365 -nodes
-  ``` 
-- The paths to the public key cryptography objects must be specified in the fields `CERT_CRT` and `CERT_KEY`.
-
-Once this configuration is applied we send a first email to our victim using the SquarePhish default template requesting MFA reconfiguration:
-![SquarePhishInitCmd](/assets/Images/2025-12-19-FOCI/III-SquarePhishSend.png)
-![SquarePhishInitEmail](/assets/Images/2025-12-19-FOCI/III-SquarePhishEmail.png)
-At this stage, the SquarePhish server must be launched as a listener that will receive the target's requests. Upon scanning the QR code we receive a second email with the device code and the page is redirected to the authentication page:
-![SquarePhishInitServer](/assets/Images/2025-12-19-FOCI/III-SquarePhishServer.png)
-![SquarePhishDeviceCode](/assets/Images/2025-12-19-FOCI/III-SquarePhishEmailDeviceCode.png)
-Once the authentication is complete our server retrieves the three security tokens:
-![SquarePhishTokenFile](/assets/Images/2025-12-19-FOCI/III-SquarePhishTokensRetrieved.png)
-![SquarePhishTokens](/assets/Images/2025-12-19-FOCI/III-SquarePhishRefreshToken.png)
-
-We can now use the retrieved refresh token to mint new access tokens to other services that are part of the FOCI!
-
-Using TokenTactics, let's leverage the refresh token to obtain access tokens for Microsoft Graph: 
-![RefreshTokenTactics](/assets/Images/2025-12-19-FOCI/III-TacticsRefreshToMsGraph.png)
-
-For those paying attention, you may notice that the client ID for Microsoft Graph PowerShell is **not listed under FOCI**, yet we successfully retrieved and used a valid access token.
-
-Take a deep breath and let's pause briefly to decode our access token and analyze its claims:
-![RefreshTokenTactics](/assets/Images/2025-12-19-FOCI/III-TacticsRefreshToMsGraphDecoded.png)
-
-- **appid** : Points to the application for which the token was issued (*OAuth client*).
-- **aud** : Identifies the targeted application which your token is meant for (*resource server*).
-- **scp** : Reflects the delegated permissions in the scope of the access token.
-
-With TokenTactics, the refresh token was redeemed using Microsoft Office application ID `d3590ed6-52b3-4102-aeff-aad2292ab01c` which is indeed in the FOCI list. However, the audience is correctly scoped to Microsoft Graph and the permissions, e.g., `Directory.#` enabled the token to be accepted and used by Microsoft Graph PowerShell.
-
-**🎯 Key Insight:** *In addition to FOCI, an additional nuance is a trust model between some Microsoft applications which enables access tokens to be validated based on their audience and scopes, rather than strictly on the original caller client ID.*
-
-*This behavior adds an important perspective on the blast radius that can be achieved with an Entra ID refresh token. While arbitrary Client IDs are not accepted - even if the audience and scopes appear valid - access tokens do not need to originate from the same client ID as the target service. As long as the token is issued to a Microsoft-owned application recognized by Entra ID, targets the correct resource audience, and includes the required permissions, token reuse across supported Microsoft applications remains possible.*
-
-We've now established that Client IDs belonging to the FOCI list can be used interchangeably to forge new security tokens for any application listed in the Family of Client IDs.
-
-➡️ <span style="color:darkred;"><b>This means that in the case of the theft of a single refresh token, the blast radius includes all applications in the FOCI list.</b></span>
-
-But once a refresh token is compromised, how effective are revocation mechanisms in limiting its blast radius?
-
-As documented in this [Microsoft security blog post](https://www.microsoft.com/en-us/security/blog/2022/11/16/token-tactics-how-to-prevent-detect-and-respond-to-cloud-token-theft/), multiple events can invalidate refresh tokens with varying degrees of effectiveness.
-
-FOCI allows a refresh token obtained for one application to be reused to silently acquire security tokens for other related Microsoft workloads.
-![RevokingSessions](/assets/Images/2025-12-19-FOCI/II-AzCliRevokeAllSessions.png)
-Using the `Revoke sessions` feature in Entra ID effectively logs out the user and revokes the security tokens for the Portal stored in the browser session storage.
-It blocks any attempts to forge new security tokens using previously generated refresh tokens.
-However, any existing access tokens are still usable until their expiration (expires_in: 7200 ~ 2h)
-
-![RevokingSessions](/assets/Images/2025-12-19-FOCI/II-AzCliAfterRevocation.png)
-
-➡️ <span><b>Revoking sign-in sessions invalidates browser sessions and prevents users from acquiring new tokens. Existing access tokens remain valid until expiration.</b></span>
-
-### FOCI Threat Model at a Glance
-
-Multiple scenarios could allow an attacker to exfiltrate security tokens. At a high level, two main vectors emerge:
-
-1. Abuse of OAuth flows:
-
-    - For example, device code authentication using any client that directly returns refresh tokens.
-
-2. Endpoint or token broker compromise:
-
-    - Including local token caches, broker-managed storage, or token material residing in memory.
-
-➡️ <span><b>Where FOCI applies, the threat model simplifies to these two vectors: abuse of OAuth flows that issue portable refresh tokens, and compromise of the endpoint or the token broker responsible for token issuance and storage.</b></span>
-
-## Token Protection & Security Measures
-
-Significant efforts have been made to reduce the exposure and portability of authentication tokens in Entra ID:
-
-- Browser-bound refresh tokens for SPAs: Refresh tokens issued to browser-based applications cannot be reused outside the browser context.
-- Short-lived access tokens with audience and scope restrictions: Access tokens are constrained to specific resources and expire quickly, limiting their usefulness if stolen.
-- Modern authentication libraries (MSAL) : Standardized token handling, secure storage, and consistent enforcement of modern OAuth flows.
-- Enforcement of MFA is being rolled out by Microsoft and will cover multiple applications including Azure CLI and PowerShell.
-- OS-level token protection with authentication brokers: Tokens are encrypted and acquired via brokers (e.g., WAM, mobile brokers), which use device-bound credentials to prevent direct access by the application.
-
-    **⚠️ Attention:** *While authentication brokers significantly reduce token exposure, a fully compromised endpoint may still allow attackers to abuse brokered credentials or mint new refresh tokens.*
-
-As with any shared responsibility model, organizations must complement these protections:
-
-- Awareness, awareness, awareness: Sensitize users and administrators on OAuth phishing techniques such as device code abuse.
-- Endpoint protection: Secure all devices (computers & mobiles) accessing corporate resources with disk encryption, strong authentication, auto-lock, and remote wipe in case of theft or loss.
-- Conditional Access policies: Enable Continuous Access Evaluation and Token Protection. In the policy:
-  - Enforce MFA, device compliance, and rapidly invalidate sessions when risk changes.
-  - Restrict device code authentication via CAP to only the users or devices that truly require it.
-  
-  **⚠️ Attention:** *[Continuous Access Evaluation](https://learn.microsoft.com/en-us/entra/identity/conditional-access/concept-continuous-access-evaluation?conditional-access-policy-evaluation) and [Token Protection](https://learn.microsoft.com/en-us/entra/identity/conditional-access/concept-token-protection#requirements) are currently enforced only for a subset of services, including Office 365 online, and mitigate certain access-token misuse scenarios when tokens are used from untrusted devices, IP addresses, or locations.*
-
-- Limit device code authentication: Restrict the use of this authentication mode via Conditional Access Policies (CAP) to only the users or devices that truly require it.
-- Harden automation tooling: Regularly update Azure CLI, PowerShell, and SDKs, and protect local token caches.
-- Monitoring and logging: Detect anomalous sign-ins, unexpected client usage, and token replay patterns using identity logs and analytics, and respond by revoking or blocking affected sessions.
-- Limit token persistence where possible : Disable context autosave or persistent sessions in sensitive environments (Disable-AzContextAutosave).
-
-**📝 Note:** *The mitigations described above reduce the likelihood and impact of token compromise but do not fully eliminate it. Tokens remain exploitable if an attacker gains full access to a device or exfiltrates a refresh token for a client / device for which CAE or Token Protection is not yet supported.*
-
-That’s a wrap ! – FOCI highlights how token portability can increase risk, but understanding token storage, browser and device boundaries, and applying the proper organizational controls can significantly reduce exposure.
+Part 2 builds on this foundation by showing how these tokens can be reused across FOCI-enabled applications, under which conditions this behavior can realistically be exploited, and how to mitigate it.
