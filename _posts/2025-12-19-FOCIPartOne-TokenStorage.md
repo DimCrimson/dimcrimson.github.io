@@ -21,12 +21,12 @@ Use demonstrated techniques only in environments you are authorized to test.</sp
 > **TL;DR**: *`FOCI` lets some Microsoft client IDs reuse refresh tokens. This first part explains token fundamentals and storage locations. The second part will show how this behavior can be abused — and how to mitigate the risk.*
 
 ---
-
 <div style="text-align: right;" markdown="1">
 📎 **Series note**  
 This article is Part 1 of a two-part series on FOCI.  
 → Continue with [**Part 2: Abuse paths and mitigations**](/posts/FOCIPartTwo-ExploitationDefense/)
 </div>
+
 ---
 
 ## 101 Security Tokens
