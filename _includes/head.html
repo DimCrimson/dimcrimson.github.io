@@ -49,12 +49,14 @@
   {% endif %}
 
   {{ seo_tags }}
+  <link rel="canonical" href="{{ page.url | absolute_url }}">
 
   <title>
-    {%- unless page.layout == 'home' -%}
-      {{ page.title | append: ' | ' }}
-    {%- endunless -%}
-    {{ site.title }}
+    {%- if page.title and page.layout != 'home' -%}
+      {{ page.title | strip | escape }} | {{ site.title | strip | escape }}
+    {%- else -%}
+      {{ site.title | strip | escape }}
+    {%- endif -%}
   </title>
 
   {% include_cached favicons.html %}
@@ -123,4 +125,33 @@
     {% endfor %}
   {% endif %}
   {% include metadata-hook.html %}
+
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "{{ site.title | escape }}",
+      "url": "{{ site.url }}{{ site.baseurl }}",
+      "description": "{{ site.description | default: site.title | escape }}",
+      "inLanguage": "{{ site.lang | default: 'en' }}",
+      "publisher": {
+        "@type": "Person",
+        "name": "{{ site.author }}",
+        "alternateName": "dimcrimson",
+        "url": "https://github.com/dimcrimson"
+      }
+    }
+  </script>
+
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Person",
+      "name": "{{ site.author }}",
+      "alternateName": "dimcrimson",
+      "url": "{{ site.url }}{{ site.baseurl }}",
+      "sameAs": ["https://github.com/dimcrimson"],
+      "description": "Cloud security and Azure identity research (Microsoft Entra ID, OAuth, token behavior)."
+    }
+  </script>
 </head>

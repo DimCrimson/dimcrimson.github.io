@@ -14,18 +14,18 @@ timezone:
 # jekyll-seo-tag settings › https://github.com/jekyll/jekyll-seo-tag/blob/master/docs/usage.md
 # ↓ --------------------------
 
-title: Cloud Musings # the main title
+title: Cloud Musings – Azure, Identity, and Cloud Security Notes # the main title
 
 author: Sara SENDID # the default author name
 
-tagline: Follow my occasional ramblings about cloud security... # it will display as the subtitle
+tagline: Occasional ramblings and notes while exploring cloud security and identity # it will display as the subtitle
 
 description: >- # used by seo meta and the atom feed
-  A space to host the occasional rambling about Azure security and more to come...
+  Notes and experiments around Azure security, identity, and cloud platform behavior, written while exploring and learning these topics.
 
 # Fill in the protocol & hostname for your site.
 # E.g. 'https://username.github.io', note that it does not end with a '/'.
-url: ""
+url: "https://dimcrimson.github.io/"
 
 github:
   username: DimCrimson
@@ -63,7 +63,7 @@ analytics:
   google:
     id: # fill in your Google Analytics ID
   goatcounter:
-    id: # fill in your GoatCounter ID
+    id: dimcrimsonsecops # fill in your GoatCounter ID
   umami:
     id: # fill in your Umami ID
     domain: # fill in your Umami domain
