@@ -7,11 +7,10 @@ categories: [Azure, Azure Entra ID]
 tags: [aad,entra id,foci,tokens,azure,identity,security]     # TAG names should always be lowercase
 ---
 
-<small><span style="color:red; display:block; text-align:center;"> ⚠️ This article is for educational and defensive purposes only.<br>
+<small><span style="color:#b00020; display:block; text-align:center; font-size:1.05rem; font-weight:500; margin:1.5rem 0;"> ⚠️  In late January 2026, Microsoft introduced a change impacting refresh token negotiation for Azure CLI and Azure PowerShell. Refresh tokens issued to these clients can no longer be reused, which suggests their removal from the FOCI list. <br>
+This article is for educational and defensive purposes only.<br>
 Use demonstrated techniques only in environments you are authorized to test.</span></small>
 
-> [!WARNING]
-> **In late January 2026, Microsoft introduced a change impacting refresh token negotiation for Azure CLI and Azure PowerShell. Refresh tokens issued to these clients can no longer be reused, which suggests their removal from the FOCI list.**
 
 *This article is part of a two-part series exploring FOCI — a Pandora's box of security risks opened by researchers at [SecureWorks](https://github.com/secureworks/family-of-client-ids-research) — which refers to a group of refresh tokens that can be used to forge access tokens for any application within the same Family of Client IDs.*
 

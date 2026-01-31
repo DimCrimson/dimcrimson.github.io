@@ -3,6 +3,8 @@ title: Read the Fine Print - Azure Key Vault Loopholes
 date: 2025-11-15 23:00:00 +0000
 description: A deep dive in Azure Key Vault bypass options ...
 comments: false
+toc: true
+published: true
 categories: [Azure, Azure Key Vault]
 tags: [akv,azure,security]     # TAG names should always be lowercase
 ---
