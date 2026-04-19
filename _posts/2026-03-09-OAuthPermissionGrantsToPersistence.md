@@ -57,7 +57,7 @@ Delegated permissions require the presence of an authenticated user and are gran
 Permissions that only require the user's consent are listed with the `AdminConsentRequired` set to 'No' with, on the default Entra ID configuration, the exclusion of some permissions through a [consent policy managed by Microsoft](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/manage-app-consent-policies?pivots=ms-graph#microsoft-recommended-user-consent-policy).
 Microsoft documentation does not always enumerate all permissions included or excluded under these policies. Full visibility therefore requires exploring the PermissionGrantPolicies object via CLI.
 
-The linked PowerShell script retrieves the policies applied in the tenant and the permissions they govern. [PLACEHOLDER - Include Link].
+The [linked PowerShell script](https://raw.githubusercontent.com/DimCrimson/dimcrimson.github.io/refs/heads/main/assets/Scripts/consentPoliciesCrawler.ps1) retrieves the policies applied in the tenant and the permissions they govern.
 
 Keep in mind that this list is subject to updates on Microsoft's side, so the script must be periodically executed to get the latest exclusion list.
 
