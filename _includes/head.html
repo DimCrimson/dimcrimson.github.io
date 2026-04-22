@@ -1,10 +1,24 @@
 <head>
+  <script>
+    (function () {
+      var canonicalHost = 'ssendid.com';
+      var currentHost = window.location.hostname;
+
+      if (currentHost === 'dimcrimson.github.io') {
+        var newUrl =
+          'https://' + canonicalHost + window.location.pathname + window.location.search + window.location.hash;
+
+        window.location.replace(newUrl);
+      }
+    })();
+  </script>
+
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f7f7">
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1b1b1e">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="robots" content="index, follow"> 
+  <meta name="robots" content="index, follow">
   <meta
     name="viewport"
     content="width=device-width, user-scalable=no initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
