@@ -57,7 +57,7 @@ Delegated permissions require the presence of an authenticated user and are gran
 Permissions that only require the user's consent are listed with the `AdminConsentRequired` set to 'No' with, on the default Entra ID configuration, the exclusion of some permissions through a [consent policy managed by Microsoft](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/manage-app-consent-policies?pivots=ms-graph#microsoft-recommended-user-consent-policy).
 Microsoft documentation does not always enumerate all permissions included or excluded under these policies. Full visibility therefore requires exploring the PermissionGrantPolicies object via CLI.
 
-The [linked PowerShell script](https://raw.githubusercontent.com/DimCrimson/dimcrimson.github.io/refs/heads/main/assets/Scripts/consentPoliciesCrawler.ps1) retrieves the policies applied in the tenant and the permissions they govern.
+The [linked PowerShell script](https://raw.githubusercontent.com/DimCrimson/dimcrimson.github.io/refs/heads/main/assets/lab/Azure/consentPoliciesCrawler.ps1) retrieves the policies applied in the tenant and the permissions they govern.
 
 Keep in mind that this list is subject to updates on Microsoft's side, so the script must be periodically executed to get the latest exclusion list.
 
@@ -466,7 +466,6 @@ As a result, detection must shift from event-based monitoring to the analysis of
 ### 8.1 Detection
 
 OAuth consent abuse detection combines identity inventory, consent event correlation, and post-consent activity analysis.
-
 The reasoning to build an accurate detection logic for OAuth consent abuse must rely on the following questions:
 
 - What identities exist and what is their exposure surface?
@@ -518,6 +517,9 @@ For admin consent, a review workflow is designated where reviewers can assess re
 
 During the service principals periodic reviews, grant objects must also be examined including `OAuth2PermissionGrant` (delegated permissions) and `AppRoleAssignment` (application permissions).
 Moreover, applications without a `verifiedPublisher` should be treated as higher risk during the reviews.
+
+> **📦 Detection Tool**: I've released a [Python-based detection tool](https://github.com/DimCrimson/dimcrimson.github.io/tree/main/lab/Azure/AzureOAuthExposureScanner) that implements the logic described in the article.
+> The tool enumerates external service principals, analyzes their OAuth permission grants and app roles, correlates sign-in activity, and outputs prioritized risk cards.
 
 #### Reactive Controls (post-detection)
 
