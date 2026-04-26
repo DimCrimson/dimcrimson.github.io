@@ -127,7 +127,7 @@ Now that we have the proper tools to investigate, let's explore the various file
     ![TBRESDecryption](/assets/Images/2025-12-19-FOCI/I-TBRES_Loop_Decryptor.png)
     This result is returned by using a loop on all the TBRES files to retrieve the protected values then decrypt them using mimikatz until we retrieve a valid access token.
 
-      A PowerShell helper to extract and decrypt .tbres DPAPI blobs is available [here](https://raw.githubusercontent.com/DimCrimson/dimcrimson.github.io/refs/heads/main/assets/Scripts/TBRESLoop.ps1) — use only on systems you own or have explicit authorization to test.
+      A PowerShell helper to extract and decrypt .tbres DPAPI blobs is available [here](https://raw.githubusercontent.com/DimCrimson/dimcrimson.github.io/refs/heads/main/lab/Azure/TBRESLoop.ps1) — use only on systems you own or have explicit authorization to test.
 
     Unlike the automation and CLI tools explored previously, Microsoft 365 desktop applications rely on the Windows authentication broker - WAM (Web Account Manager), to securely manage and broker the security tokens on behalf of the application.
 
