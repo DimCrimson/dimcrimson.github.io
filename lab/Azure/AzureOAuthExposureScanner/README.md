@@ -87,9 +87,6 @@ $env:CLIENT_SECRET="xxx"
 pip install -r requirements.txt
 python oauth_scanner.py
 ```
+## 📸 Example Output
 
----
-
-## 🔗 Links
-
-- GitHub Repository: [https://github.com/DimCrimson/AzureOAuthExposureScanner](https://github.com/DimCrimson/AzureOAuthExposureScanner)
+![OAuth Scanner Output](media/oauth_scanner_output.png)
