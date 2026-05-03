@@ -1,0 +1,71 @@
+// ============================================================
+// Query: Consent Phishing — Sign-in Correlation
+// ============================================================
+// Description : Detects the core consent phishing pattern:
+//               a consent-blocked authentication (65001) immediately
+//               followed by a successful sign-in on the same
+//               correlationId, enriched with the audit consent event
+//               to surface granted permissions and admin consent scope
+//               in a single output row.
+//
+// ============================================================
+
+let ConsentBlocked = AADSignInLogs
+    | where ResultType == "65001"
+    | project
+        CorrelationId,
+        BlockedTime       = TimeGenerated,
+        UserPrincipalName,
+        AppDisplayName,
+        AppId,
+        IPAddress,
+        ConditionalAccess = ConditionalAccessStatus;
+
+let ConsentSuccess = AADSignInLogs
+    | where ResultType == "0"
+    | project
+        CorrelationId,
+        SuccessTime = TimeGenerated;
+
+let ConsentAudit = AuditLogs
+    | where ActivityDisplayName == "Consent to application"
+    | extend
+        GrantedBy          = tostring(InitiatedBy.user.userPrincipalName),
+        GrantedByIP        = tostring(InitiatedBy.user.ipAddress),
+        OnBehalfOfAll      = tostring(AdditionalDetails[?(@.key == "ConsentContext.OnBehalfOfAll")].value),
+        IsAdminConsent     = tostring(AdditionalDetails[?(@.key == "ConsentContext.IsAdminConsent")].value),
+        GrantedPermissions = tostring(AdditionalDetails[?(@.key == "ConsentAction.Permissions")].value)
+    | project
+        CorrelationId,
+        AuditTime          = TimeGenerated,
+        GrantedBy,
+        GrantedByIP,
+        OnBehalfOfAll,
+        IsAdminConsent,
+        GrantedPermissions;
+
+ConsentBlocked
+| join kind=inner ConsentSuccess on CorrelationId
+| where datetime_diff('minute', SuccessTime, BlockedTime) between (0 .. 10)
+| join kind=leftouter ConsentAudit on CorrelationId
+| extend
+    MinutesBetween = datetime_diff('minute', SuccessTime, BlockedTime),
+    RiskLevel = case(
+        OnBehalfOfAll  == "True", "HIGH — tenant-wide admin consent granted after phishing",
+        IsAdminConsent == "True", "HIGH — admin consent granted after phishing",
+                                  "MEDIUM — user consent granted after phishing"
+    )
+| project
+    BlockedTime,
+    SuccessTime,
+    MinutesBetween,
+    UserPrincipalName,
+    AppDisplayName,
+    AppId,
+    IPAddress,
+    ConditionalAccess,
+    GrantedBy,
+    OnBehalfOfAll,
+    GrantedPermissions,
+    RiskLevel
+| order by BlockedTime desc

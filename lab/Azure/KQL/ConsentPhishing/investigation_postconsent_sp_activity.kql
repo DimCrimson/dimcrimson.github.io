@@ -1,0 +1,46 @@
+// ============================================================
+// Query: Post-Consent Service Principal Activity
+// ============================================================
+// Description : Determines whether a flagged service principal
+//               is actively using its consent grant by summarising
+//               sign-in activity, target resources accessed, and
+//               Conditional Access coverage gaps.
+//               Run this after identifying a suspicious SP from
+//               the directory inventory or the detection query.
+//
+// ============================================================
+
+let SuspiciousApp = "OAuthGrantAbuse"; // replace with target app name
+
+AADServicePrincipalSignInLogs
+| where AppDisplayName == SuspiciousApp
+    or ServicePrincipalName == SuspiciousApp
+| summarize
+    SignInCount     = count(),
+    FirstSeen       = min(TimeGenerated),
+    LastSeen        = max(TimeGenerated),
+    UniqueIPs       = dcount(IPAddress),
+    TargetResources = make_set(ResourceDisplayName),
+    CAGap           = countif(ConditionalAccessStatus == "notApplied")
+    by AppDisplayName, ServicePrincipalId
+| extend
+    GrantStatus = case(
+        SignInCount > 0 and LastSeen > ago(7d), "ACTIVE — sign-in within last 7 days",
+        SignInCount > 0,                        "STALE — historical activity only",
+                                                "INACTIVE — no sign-in activity recorded"
+    ),
+    CAExposure = iff(
+        CAGap > 0,
+        strcat(tostring(CAGap), " sign-in(s) with no CA policy applied"),
+        "CA coverage present on all sign-ins"
+    )
+| project
+    AppDisplayName,
+    ServicePrincipalId,
+    SignInCount,
+    FirstSeen,
+    LastSeen,
+    UniqueIPs,
+    TargetResources,
+    GrantStatus,
+    CAExposure
