@@ -14,10 +14,8 @@ layout: compress
 <!-- `site.alt_lang` can specify a language different from the UI -->
 <html lang="{{ page.lang | default: site.alt_lang | default: site.lang }}" {{ prefer_mode }}>
   {% include head.html %}
-  <link rel="stylesheet" href="{{ '/assets/css/styles.css' | relative_url }}">
   <body>
     {% include sidebar.html lang=lang %}
-
     <div id="main-wrapper" class="d-flex justify-content-center">
       <div class="container d-flex flex-column px-xxl-5">
         {% include topbar.html lang=lang %}
