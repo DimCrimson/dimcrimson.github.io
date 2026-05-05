@@ -48,13 +48,22 @@ However, it is not based on the usual Key Vault Data Actions, but on the permiss
 (New-AzResourceGroupDeployment -Name "Deployment_KV_FW_Bypass" -ResourceGroupName "rg_sara" -TemplateFile .\deployment_template.json -TemplateParameterFile .\deployment_param.json).Outputs | fl
    ```
 
+As for Option A, multi-tenant application scenarios are out of scope for this article.
+
 ---
 
 ### Option C – Access Policies
 
-Access Policies blend RBAC and local authentication concepts — they are still tied to Entra ID objects but operate outside the RBAC model of the current tenant. They can grant access to different Key Vault data plane objects: secrets, keys, and certificates.
+Access Policies blend RBAC and local authentication concepts: they are still tied to Entra ID objects but operate outside the RBAC model of the current tenant. They can grant access to different Key Vault data plane objects: secrets, keys, and certificates.
 
 Access Policies avoid the need to grant Key Vault administrators direct RBAC role assignments permissions, which was particularly useful before the introduction of [conditions](https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments#conditions) that restrict how role assignments can be issued. Instead, Access Policies rely on the permission `Microsoft.KeyVault/vaults/accessPolicies/write` and `Microsoft.KeyVault/vaults/write` to modify the Key Vault tenant ID value or switch authorization modes from RBAC to Access Policies.
+
+**⚠️ Attention:**  *Switching between RBAC and Access Policies requires updating the `DisableRbacAuthorization` property to match the access mode: it is not done automatically*
+
+```powershell
+# Disable RBAC to switch back to Access Policies
+Update-AzKeyVault -VaultName "sse-kv" -ResourceGroupName "rg_sara" -DisableRbacAuthorization $true
+```
 
 !["PSGetVault"](/assets/Images/2025-11-15-AzureKVLoopholes/update-kv-access-policy.png)
 
@@ -89,13 +98,6 @@ After updating the Key Vault `tenantId`, adding the external access policy succe
 *Perfect option to exploit for our initial theory...*
 
 !["KVDiagram"](/assets/Images/2025-11-15-AzureKVLoopholes/akv-diagram.png)
-
-**⚠️ Attention:**  *Switching between RBAC and Access Policies requires updating the `DisableRbacAuthorization` property to match the access mode: it is not done automatically*
-
-```powershell
-# Disable RBAC to switch back to Access Policies
-Update-AzKeyVault -VaultName "sse-kv" -ResourceGroupName "rg_sara" -DisableRbacAuthorization $true
-```
 
 ## 3. Network Layer
 
@@ -136,7 +138,7 @@ Let's explore our options based on the [Microsoft Trusted Services for Azure Key
       <tr>
         <td>Azure Data Factory</td>
         <td>Data Factory in external tenant</td>
-        <td>ADF Linked Service + system-assigned identity authorized in access policy</td>
+        <td>ADF Linked Service & system-assigned identity authorized in access policy</td>
         <td>✅ Success — works when initiated by ADF-managed compute</td>
       </tr>
     </tbody>
@@ -147,7 +149,11 @@ Trusted services access appears scoped to the **Data Factory Integration Runtime
 
 However, using ADF Linked Services and granting access to the managed identity successfully establishes a connection with the Key Vault. At this point, the Key Vault secret objects can be used in any Linked Service inside the ADF instance.
 
-**🎯 Key Insight:** *Successfully connecting the linked service confirms our initial assumption: The **network bypass option** combined with **enabled access policies** allows a Data Factory instance in a second tenant to access the Key Vault.*
+**🎯 Key Insight:** *Successfully connecting the linked service confirms our initial theory: The **network bypass option** combined with **access policies** allows a Data Factory instance in a second tenant to access the Key Vault.*
+
+*The ADF integration runtime bypasses as a **trusted service** the Key Vault resource firewall rules, and authentication is evaluated against the vault's configured **tenantId**, already pointing to the external tenant with **access policies granting access to the ADF Managed Identity**, resulting in cross-tenant secret access.*
+
+*The root of it: `Microsoft.KeyVault/vaults/accessPolicies/write` and `Microsoft.KeyVault/vaults/write`, conjured for perfectly legitimate reasons, fused into something their author never intended.*
 
 ---
 
@@ -173,11 +179,11 @@ However, using ADF Linked Services and granting access to the managed identity s
 **📝 Note:** *The Key Vault diagnostic settings clearly show accesses made through the trusted-services bypass:*
  ![TrustedServicesDiag](/assets/Images/2025-11-15-AzureKVLoopholes/kv-diagnostics-trusted-services.png)
 
-## 4. Security Recommendations
+## 4. Recommendations & Detections
 
 Now that we've explored the scenario, here are some recommendations to help secure your Key Vaults and prevent the exfiltration of sensitive and high-value secrets:
 
-- Enforce Entra ID RBAC for Key Vault data plane, or deploy an Azure Policy that denies any Key Vault where `tenantId` differs from your organization's tenant ID(s). Since no built-in policy currently exists, you can use my sample below, which also covers Key Vault Managed HSM:
+- Enforce Entra ID RBAC for Key Vault data plane through a Deny variant of the [Microsoft's built-in policy](https://github.com/Azure/azure-policy/blob/master/built-in-policies/policyDefinitions/Key%20Vault/Should_Use_RBAC.json), or deploy an Azure Policy that denies any Key Vault where `tenantId` differs from your organization's tenant ID(s). Since no built-in policy currently exists, you can use my sample below, which also covers Key Vault Managed HSM:
 
 ```json
 {
@@ -216,15 +222,11 @@ Now that we've explored the scenario, here are some recommendations to help secu
 }
 ```
 
+**⚠️ Attention:** *Re-enabling RBAC mode on a compromised vault does not delete existing access policies, they remain dormant and reactivate if Access Policies authorization mode is re-enabled. An explicit cleanup is therefore required.*
 
-- Log and alert on unexpected trusted-service access. See the example Kusto query below:
+- Log and alert on unexpected trusted-service access and Key Vault control-plane mutations. Detection queries covering trusted service bypass access on Key Vaults with an external tenantId value and control-plane tenantId mutations via Activity Logs are available in the [GitHub KeyVaultLoopholes KQL folder](https://github.com/DimCrimson/dimcrimson.github.io/tree/main/lab/Azure/KQL/KeyVaultLoopholes). These queries are a good signal and can be deployed as Scheduled Analytics Rules in Azure Sentinel.
 
-```SQL
-AzureDiagnostics
-| where ResourceProvider == "MICROSOFT.KEYVAULT"
-| where isnotempty(trustedService_s)
-| project TimeGenerated, ResourceId, ResourceType, OperationName, httpStatusCode_d, requestUri_s, id_s, identity_claim_oid_g, identity_claim_iss_s, addrAuthType_s, trustedService_s
-```
+- Disable public network access on Key Vaults where possible and enforce connectivity through Private Endpoints. This renders the trusted services bypass unavailable..
 
 And if you want to go further:
 
@@ -233,6 +235,20 @@ And if you want to go further:
 
 **⚠️ Attention:** *Although disabling the network bypass option "Allow trusted Microsoft services to bypass this firewall" might seem safer, it can block legitimate operations such as ARM deployments or Azure DevOps pipelines that require access to Key Vault objects. The alternative—manually maintaining the relevant Microsoft IP addresses in the Key Vault firewall—is highly impractical, particularly since these IP ranges are frequently updated by Microsoft.*
 
-### Conclusion
+---
+
+<span style="color:darkred; display:block; text-align:center; font-size:1.2em; font-weight:bold;">
+Update — [06/05/2026] </span> 
+
+>
+> **I retested the `tenantId` mutation and confirmed Microsoft has introduced an additional validation step blocking this vector.**
+> 
+> **The `tenantId` value is now restricted to the subscription's home tenant or tenants explicitly delegated via Azure Lighthouse `managedByTenants` property.**
+> 
+> **The detection queries and policy recommendations remain fully applicable, particularly for environments with Azure Lighthouse delegations where a malicious insider or compromised service provider could abuse an existing delegation to perform the chain documented in this article.**
+>
+>![KVMutationManagedByTenantId](/assets/Images/2025-11-15-AzureKVLoopholes/kv-managedbytenantId-validation.png)
+
+## 5. Conclusion
 
 That's a wrap ! — Even subtle bypasses can lead to serious security risks, so layer your defenses with RBAC, resource firewalls, Azure policies, and diagnostic settings to keep your Key Vaults sealed tight.

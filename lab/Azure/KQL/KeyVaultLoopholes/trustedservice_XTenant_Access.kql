@@ -1,0 +1,10 @@
+AzureDiagnostics
+| where ResourceProvider == "MICROSOFT.KEYVAULT"
+| where isnotempty(trustedService_s)
+// Replace the placeholder with your tenant ID.
+| extend CrossTenantAccess = iff(
+    identity_claim_iss_s !contains "<YOUR_TENANT_ID>", "External Tenant", "Same Tenant")
+| project TimeGenerated, ResourceId, OperationName, httpStatusCode_d,
+    requestUri_s, identity_claim_oid_g, identity_claim_iss_s,
+    trustedService_s, CrossTenantAccess
+| order by TimeGenerated desc

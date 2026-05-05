@@ -1,0 +1,11 @@
+AzureActivity
+| where OperationNameValue == "MICROSOFT.KEYVAULT/VAULTS/WRITE"
+| where ActivityStatusValue == "Success"
+| extend requestBody = parse_json(tostring(parse_json(Properties).requestbody))
+| extend requestedTenantId = tostring(requestBody.properties.tenantId)
+| where isnotempty(requestedTenantId)
+// Replace the placeholder with your tenant ID.
+| where requestedTenantId != "<YOUR_TENANT_ID>"
+| project TimeGenerated, Resource, Caller, CallerIpAddress,
+    requestedTenantId, CorrelationId
+| order by TimeGenerated desc
