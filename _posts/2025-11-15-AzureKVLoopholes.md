@@ -153,7 +153,7 @@ However, using ADF Linked Services and granting access to the managed identity s
 
 *The ADF integration runtime bypasses as a **trusted service** the Key Vault resource firewall rules, and authentication is evaluated against the vault's configured **tenantId**, already pointing to the external tenant with **access policies granting access to the ADF Managed Identity**, resulting in cross-tenant secret access.*
 
-*The root of it: `Microsoft.KeyVault/vaults/accessPolicies/write` and `Microsoft.KeyVault/vaults/write`, conjured for perfectly legitimate reasons, fused into something their author never intended.*
+*The root of it: `Microsoft.KeyVault/vaults/accessPolicies/write` and `Microsoft.KeyVault/vaults/write`, conjured for perfectly legitimate reasons, fused into something their author never intended. Two permissions to rule the Key Vault.*
 
 ---
 
@@ -237,17 +237,19 @@ And if you want to go further:
 
 ---
 
-<span style="color:darkred; display:block; text-align:center; font-size:1.2em; font-weight:bold;">
-Update — [06/05/2026] </span> 
+## May 2026 — Platform Behavior Change
 
 >
-> **I retested the `tenantId` mutation and confirmed Microsoft has introduced an additional validation step blocking this vector.**
-> 
-> **The `tenantId` value is now restricted to the subscription's home tenant or tenants explicitly delegated via Azure Lighthouse `managedByTenants` property.**
-> 
-> **The detection queries and policy recommendations remain fully applicable, particularly for environments with Azure Lighthouse delegations where a malicious insider or compromised service provider could abuse an existing delegation to perform the chain documented in this article.**
+> During routine retesting of the attack path, I noticed that the behavior related to tenant alignment in Azure Key Vault has evolved. The `tenantId` mutation vector documented in this article is no longer broadly exploitable: <u>Microsoft has introduced enforcement mechanisms restricting a vault's tenantId value to the subscription's home tenant or **tenants explicitly delegated via Azure Lighthouse** (`managedByTenants` property)</u>. 
+>
+> Microsoft upgraded tenant trust to an explicit, governed relationship, significantly reducing the attack surface. This platform change is, in itself, a confirmation of the criticality of the path identified. 
+>
+> In environments leveraging Azure Lighthouse, however, <u>**the path remains viable if a delegation is abused by a compromised service provider**</u>. The detection queries, policy recommendations, and defensive guidance in this article remain fully applicable.
+>
+> *In the eternal game of cat and mouse, the attack surface shrank. The threat didn't disappear.*
 >
 >![KVMutationManagedByTenantId](/assets/Images/2025-11-15-AzureKVLoopholes/kv-managedbytenantId-validation.png)
+>
 
 ## 5. Conclusion
 
