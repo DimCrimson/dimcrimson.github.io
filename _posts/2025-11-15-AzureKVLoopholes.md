@@ -240,11 +240,11 @@ And if you want to go further:
 ## May 2026 — Platform Behavior Change
 
 >
-> During routine retesting of the attack path, I noticed that the behavior related to tenant alignment in Azure Key Vault has evolved. The `tenantId` mutation vector documented in this article is no longer broadly exploitable: <u>Microsoft has introduced enforcement mechanisms restricting a vault's tenantId value to the subscription's home tenant or **tenants explicitly delegated via Azure Lighthouse** (`managedByTenants` property)</u>. 
+> During routine retesting of the attack path, I noticed that the behavior related to tenant alignment in Azure Key Vault has evolved. The `tenantId` mutation vector documented in this article is no longer broadly exploitable: <u>Microsoft has introduced enforcement mechanisms restricting a vault's tenantId value to the subscription's home tenant or <b>tenants explicitly delegated via Azure Lighthouse</b></u> (`managedByTenants` property). 
 >
 > Microsoft upgraded tenant trust to an explicit, governed relationship, significantly reducing the attack surface. This platform change is, in itself, a confirmation of the criticality of the path identified. 
 >
-> In environments leveraging Azure Lighthouse, however, <u>**the path remains viable if a delegation is abused by a compromised service provider**</u>. The detection queries, policy recommendations, and defensive guidance in this article remain fully applicable.
+> In environments leveraging Azure Lighthouse, however, <u><b>the path remains viable if a delegation is abused by a compromised service provider</b></u>. The detection queries, policy recommendations, and defensive guidance in this article remain fully applicable.
 >
 > *In the eternal game of cat and mouse, the attack surface shrank. The threat didn't disappear.*
 >
