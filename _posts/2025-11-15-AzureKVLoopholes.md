@@ -254,3 +254,5 @@ And if you want to go further:
 ## 5. Conclusion
 
 That's a wrap ! — Even subtle bypasses can lead to serious security risks, so layer your defenses with RBAC, resource firewalls, Azure policies, and diagnostic settings to keep your Key Vaults sealed tight.
+
+![KVExfiltrationSummaryCard](/assets/Images/2025-11-15-AzureKVLoopholes/KVExfiltrationCard.jpg)

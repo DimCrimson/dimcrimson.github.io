@@ -463,3 +463,5 @@ In confirmed malicious use cases, the service principal object, and all associat
 ## 9. Conclusion
 
 That’s a wrap ! — OAuth consent abuse is an identity control-plane risk where the persistence anchor is an authorization artifact. Effective defense requires pre-consent controls to restrict the attack surface, continuous inventory of external application grants, and detection logic that correlates consent events with identity lifecycle and post-consent activity.
+
+![OAuthConsentAbuseSummaryCard](/assets/Images/2026-03-09-OAuthPermissionsGrant/OAuthConsentCard.png)
