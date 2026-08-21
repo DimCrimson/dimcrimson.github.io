@@ -433,6 +433,8 @@ This layer completes the lifecycle analysis by identifying cases where applicati
 
 ## 8 Mitigation and Hardening Controls
 
+**⚠️ Attention:** *Conditional Access for workload identities is not a universal safety net. It can cover eligible single-tenant service principals, but [not the multi-tenant external applications used in this attack path](https://learn.microsoft.com/en-us/entra/identity/conditional-access/workload-identity). For those, consent governance and monitoring remain the main controls.*
+
 ### 8.1 Preventive Controls (pre-consent)
 
 **User Consent Restrictions**: User consent policies must be configured to limit the ability of users to grant permissions to applications.

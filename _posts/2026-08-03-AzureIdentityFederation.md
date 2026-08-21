@@ -192,37 +192,32 @@ The role assignments never changed; the party capable of exercising them did.
 
 ## 5. Security Measures for Trust Issues
 
-The AI agent was only the vector. The real security issue is the trust relationship persisted through the FIC.
+The AI agent was only the vector. Once the FIC is there, this becomes a workload identity problem.
 
-### 5.1 Treat FICs as authentication trust
+**⚠️ Attention:** *Managed identities are currently [out of scope for Conditional Access for workload identities](https://learn.microsoft.com/en-us/entra/identity/conditional-access/workload-identity). In practice, this means we cannot restrict our UAMI to trusted network locations through CA. Once the rogue federation trust exists, the assertion exchange can be initiated from external infrastructure, just as it was in this lab.*
 
-RBAC defines **what** an identity can access. Federated credentials define **who can obtain tokens as that identity**.
+### 5.1 Preventive and Governance Controls
 
-For sensitive identities, the full trust tuple should therefore be reviewed and authorized:
+- Tightly restrict who can perform `Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials/write`.
+This action allows a principal to add or update a FIC and is included in the built-in `Managed Identity Contributor` role. It should therefore be considered a privileged operation and scoped to the required identities only.
 
-`target identity` + `issuer` + `subject` + `audience`
+- A provisioning workflow should verify that the trust tuple: `issuer` + `subject` + `audience` is actually expected on the targeted identity. Particular attention should be given to the `issuer`, as it defines which external signing authority Entra is willing to trust. *Is this issuer approved for this specific UAMI, and are the associated subject and audience values consistent with that trust?*
+That relationship should be checked against an approved workload identity baseline rather than derived from uncontrolled input.
 
-A new FIC should be treated as a security-sensitive change, especially since it can coexist with legitimate credentials without breaking the existing workload.
+- Federated credentials should also be part of the identity lifecycle: expected issuers and subjects, and removal conditions should be periodically reviewed alongside the UAMI's RBAC assignments.
 
-### 5.2 Authorize the trust, not only the operation
+### 5.2 Detection and Remediation
 
-Being allowed to modify a managed identity should not mean being allowed to trust any issuer.
+For detection, the event that matters most is the trust modification itself.
 
-Provisioning controls should validate that the requested `issuer`, `subject` and `audience` are actually expected for the target identity, ideally against an authoritative workload identity catalogue.
+FIC creation, update and deletion are Azure control-plane operations. On sensitive managed identities, I would at least monitor for:
 
-The principal allowed to modify FICs should also be kept least-privileged.
+- Issuer URLs that are not expected or part of the approved federation baseline;
+- FIC changes outside the expected provisioning workflow;
 
-### 5.3 Trust, but verify
+Once an unauthorized FIC is identified, removing it closes that federation path for future token exchanges. Azure also exposes `Microsoft.ManagedIdentity/userAssignedIdentities/revokeTokens/action` to revoke existing tokens for the UAMI.
 
-FICs should be inventoried and monitored like any other authentication mechanism.
-
-Watch for:
-- New or modified FICs;
-- Unknown external issuers;
-- Unexpected trust tuples on privileged identities;
-- Differences between configured FICs and the approved baseline.
-
-The useful signal is not the malicious prompt itself. It is **a trust relationship in Azure that should not exist**.
+The useful signal is the trust state itself: a federation relationship configured on the identity that should not exist.
 
 ## Conclusion
 
