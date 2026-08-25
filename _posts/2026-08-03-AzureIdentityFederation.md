@@ -210,10 +210,39 @@ That relationship should be checked against an approved workload identity baseli
 
 For detection, the event that matters most is the trust modification itself.
 
-FIC creation, update and deletion are Azure control-plane operations. On sensitive managed identities, I would at least monitor for:
+FIC changes are Azure control-plane operations. On sensitive managed identities, I would at least monitor for:
 
-- Issuer URLs that are not expected or part of the approved federation baseline;
+- Issuer URLs that are not expected or part of the expected federation configuration;
 - FIC changes outside the expected provisioning workflow;
+
+Azure Activity Log gives us the first signal: FIC creation and update events are traced back to the affected UAMI, the FIC name and the identity that performed the operation.
+
+```sql
+AzureActivity
+| where OperationNameValue =~ "Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials/write"
+| project HTTPResource = tostring(Properties_d.resource), TimeGenerated, Status = ActivityStatusValue, Caller, ResourceId, CorrelationId
+| order by TimeGenerated desc
+```
+
+![FICActivityLog](/assets/Images/2026-08-03-AzureIdentityFederation/FIC_ActivityLogs.png)
+
+The `Caller` value matches the object ID of the service principal used by the provisioning API.
+
+![FICActivityLogCaller](/assets/Images/2026-08-03-AzureIdentityFederation/FIC_ActivityLogs_Caller.png)
+
+Managed identity sign-in logs provide the second signal: whether the federated trust was actually used to obtain a Microsoft Entra access token for the UAMI. These logs expose, among other fields, the UAMI involved, the source IP address and the target resource. The event also exposes a `ClientCredentialType` = "federatedIdentityCredential", confirming that a federated credential was used for the authentication.
+
+```sql
+AADManagedIdentitySignInLogs
+| project TimeGenerated, ServicePrincipalName, ServicePrincipalId, AppId, ClientCredentialType, FederatedCredentialId, IPAddress, ResourceDisplayName, ResourceIdentity, ResultType,ResultSignature, CorrelationId
+| order by TimeGenerated desc
+```
+
+![FICSignInLogs](/assets/Images/2026-08-03-AzureIdentityFederation/FIC_SignInLogs.png)
+
+**⚠️ Attention:** *The `issuer` is not directly exposed in the sign-in event. In my test, `FederatedCredentialId` was a GUID that did not match the ARM resource ID of the FIC, so the sign-in log alone does not directly identify which FIC, and therefore which issuer, was used.*
+
+These two signals are complementary: the Activity Log identifies which FIC was changed and by whom, while the managed identity sign-in logs show that federation was subsequently used, from where and toward which resource. The FIC configuration still needs to be inspected to identify the configured issuer and verify that it matches the expected federation configuration.
 
 Once an unauthorized FIC is identified, removing it closes that federation path for future token exchanges. Azure also exposes `Microsoft.ManagedIdentity/userAssignedIdentities/revokeTokens/action` to revoke existing tokens for the UAMI.
 
