@@ -34,19 +34,21 @@ Trust me, I'm ~~an engineer~~ federated.
 
 Federated Identity Credentials can be configured on Microsoft Entra applications and user-assigned managed identities. This article focuses on the latter.
 
-Managed Identities remove the burden of managing credentials for Azure workloads and remain identity objects within their Entra tenant, this sometimes lull security teams into a false sense of security: While the managed identity itself is indeed tenant-bound, workload identity federation allows it to trust tokens issued by an external identity provider.
+Managed Identities remove the burden of managing credentials for Azure workloads and remain identity objects within their Entra tenant, this sometimes lulls security teams into a false sense of security: While the managed identity itself is indeed tenant-bound, workload identity federation allows it to trust tokens issued by an external identity provider.
 > A workload outside the tenant, and even outside Azure, can authenticate as that identity when its issuer and claims satisfy a configured FIC.
 
 ![FederationFlow](/assets/Images/2026-08-03-AzureIdentityFederation/FIC_Federation_Flow.png)
+
+During workload identity federation, the external identity provider issues a signed token **"the external assertion"**, to the workload. The workload presents this assertion to Microsoft Entra ID, which validates it against the configured federation trust before issuing its own access token.
 
 ### The Trust Tuple
 
 *Note: This article focuses on the traditional subject-based workload identity federation model. Flexible Federated Identity Credentials extend this model by allowing claims-matching expressions instead of an exact subject match, and can include certain additional claims in the matching logic.*
 
-The trust decision relies primarily on three values carried by the external assertion and represented in the FIC: issuer, subject and audience.
+The trust decision relies primarily on three **claims** (attributes carried inside the assertion), and represented in the FIC: issuer (`iss`), subject (`sub`) and audience (`aud`):
 
-- `issuer` : The URL representing the external identity provider that generates and signs a JWT token.
-- `subject` : The unique identified for the specific workload user or process inside the issuer. e.g. system:serviceaccount:property-apps:property-indexer
+- `issuer` : The URL identifying the external identity provider that generates and signs the JWT assertion.
+- `subject` : The identifier of the specific workload user or process inside the issuer. e.g. system:serviceaccount:property-apps:property-indexer
 - `audience` : The URL representing the intended recipient of the external assertion. For Microsoft Entra workload identity federation, this is typically api://AzureADTokenExchange.
 
 Keep these three values in mind. They will reappear twice in the demo: first when the FIC is injected into the managed identity, and then again as the iss, sub and aud claims of the attacker-controlled assertion.
@@ -60,7 +62,7 @@ FICs do not grant the managed identity additional Azure permissions. They change
 
 RBAC tells us what the identity can do. Federation tells us who may be able to exercise it.
 
-To have a better grasp of WIF and the associated dependencies, I built a simple lab to dissect each step of the flow.
+To have a better grasp of WIF and the associated dependencies, I built a simple lab to dissect the exchange step by step: how the assertion is built and validated, how the issuer exposes its signing keys, and how that assertion ultimately becomes an Azure access token.
 
 ## 3. Threat model : Know your trust boundaries
 
@@ -152,7 +154,11 @@ Now that a Federated Identity Credential trusting our rogue issuer has been conf
 
 It starts with our external issuer, the VM with the public DNS, that will build assertions that Microsoft Entra ID can validate. This assertion is a signed JWT token but it is not an azure access token. It is a token that carries information or `claims` describing the external workload and is presented to Microsoft Entra ID as a credential. Entra validates the assertion and its signature, checks that its federation claims match the configured FIC, and can then issue a separate access token for the requested Azure resource.
 
-To create the assertion, the VM holds an asymmetric RSA signing key pair, the private key remains on the issuer and is used to sign JWT assertions, while the corresponding public key is exposed through the issuer's JWKS endpoint. 
+To create the assertion, the VM holds an asymmetric RSA signing key pair, the private key remains on the issuer and is used to sign JWT assertions, while the corresponding public key is exposed through the issuer's JWKS endpoint.
+
+The issuer exposes OIDC discovery metadata at `{issuer}/.well-known/openid-configuration`, pointing Entra to its JWKS endpoint. This endpoint exposes the issuer's public signing keys, which Entra uses to validate the assertion signature.
+
+![OIDCPublicendpoints](/assets/Images/2026-08-03-AzureIdentityFederation/FIC_OIDCPublicendpoints.png)
 
 A freshly minted assertion can be decoded to inspect the claims:
 
@@ -163,6 +169,8 @@ Three values should look familiar as they match the value injected in the manage
 - iss: https://fic-issuer-vm.francecentral.cloudapp.azure.com
 - sub: partner-runtime/property-indexer
 - aud: api://AzureADTokenExchange
+
+The assertion also contains the usual JWT lifetime claims: `iat` indicates when it was issued, `nbf` when it becomes valid, and `exp` when it expires. The `jti` provides a unique identifier for the assertion.
 
 **⚠️ Attention:** *[Microsoft Entra performs exact, case-sensitive matching of the FIC issuer, subject, and audience values](https://learn.microsoft.com/en-us/entra/identity-platform/reference-breaking-changes#federated-identity-credentials-now-use-case-sensitive-matching). In our lab, an unexpected trailing / in the configured issuer URL was enough to prevent the assertion from matching until both values were aligned.*
 
