@@ -259,3 +259,5 @@ The useful signal is the trust state itself: a federation relationship configure
 ## Conclusion
 
 That's a wrap ! Security engineers must mind the Trust Gap. Reviewing what an identity can access is only half the job. The other half is knowing **who is allowed to become it**.
+
+![FICAbuseSummaryCard](/assets/Images/2026-08-03-AzureIdentityFederation/FICAbuseCard.png)
